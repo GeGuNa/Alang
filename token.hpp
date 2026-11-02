@@ -2,6 +2,7 @@
 
 #include <string>
 #include <variant>
+#include <iostream>
 
 enum TokType {
     T_INT_LIT, T_FLOAT_LIT, T_STRING_LIT, T_CHAR_LIT, T_BOOL_LIT,
