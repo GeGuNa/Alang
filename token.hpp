@@ -19,3 +19,14 @@ struct Token {
     double dval;
     bool bval;
 };
+
+
+
+struct Lexer {
+    std::string src;
+    int pos;
+    int line;
+
+    Lexer(const std::string& s) : src(s), pos(0), line(1) {}
+    
+};
