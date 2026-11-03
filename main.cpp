@@ -20,6 +20,12 @@ struct Lexer {
 
 };
 
+struct parser {
+	string src;
+	int pos;
+	int line;
+};
+
 
 void print_info(std::string_view sv) {
     std::cout << "Length: " << sv.size() << " | Data: " << sv << '\n';
