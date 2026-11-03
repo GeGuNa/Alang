@@ -1,0 +1,38 @@
+#include <iostream>
+#include <string>
+#include <string_view>
+
+
+using namespace std;
+
+struct Lexer {
+    string src;
+    int pos;
+    int line;
+
+   // Lexer(string_view s) : src(s), pos(0), line(1) {}
+   // Lexer(string s) : src(s), pos(0), line(1) {}
+   
+    char peek()  { return pos < (int)src.size() ? src[pos] : '\0'; }
+    char peek2() { return pos+1 < (int)src.size() ? src[pos+1] : '\0'; }
+    char advance() { return src[pos++]; }
+    bool atEnd()   { return pos >= (int)src.size(); }
+
+};
+
+
+void print_info(std::string_view sv) {
+    std::cout << "Length: " << sv.size() << " | Data: " << sv << '\n';
+}
+
+int main() {
+    string str = "Hello from std::string";
+    
+   if (!(10>15)) {
+   	cout << "qweqw \n";
+   } 
+    
+    print_info(str);             
+    print_info("Literal string");
+    print_info({str.data(), 2}); 
+}
