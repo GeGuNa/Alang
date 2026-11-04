@@ -1,7 +1,7 @@
 #include <iostream>
 #include <string>
 #include <string_view>
-
+#include <cctype>
 
 using namespace std;
 
@@ -34,9 +34,27 @@ void print_info(std::string_view sv) {
 int main() {
     string str = "Hello from std::string";
     
+    
+    string aq = R"(
+    qweqwe
+    qweqwe
+    qweqweqwe
+    
+    int a = 15;
+    int b = 125;
+    float c = 14.3;
+    a = 35;
+    )";
+    
    if (!(10>15)) {
    	cout << "qweqw \n";
    } 
+    
+    
+    cout  << aq.size() << "\n";
+    
+    print_info(aq);  
+    
     
     print_info(str);             
     print_info("Literal string");
