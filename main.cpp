@@ -49,6 +49,17 @@ int main() {
    if (!(10>15)) {
    	cout << "qweqw \n";
    } 
+   
+   
+   
+   int a = 0;
+   while (a < aq.size()) {
+   
+  
+  cout << a << " \n";
+  
+  	a++;
+   }
     
     
     cout  << aq.size() << "\n";
