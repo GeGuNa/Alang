@@ -30,7 +30,7 @@ struct parser {
 
 
 enum class Tok {
-    Int, Double, Ident, Number,
+    Int, Double, Ident, Number, String,
     Assign, Semicolon, End
 };
 
@@ -38,6 +38,7 @@ enum class Tok {
 struct Token {
     Tok kind;
     string text;
+    string value;  
     bool isFloat = false; 
     int pos = 0;
 };
@@ -60,6 +61,8 @@ int main() {
     int a = 15;
     int b = 125;
     float c = 14.3;
+    str a = "qweqweqwe";
+    string bbb = "zzzzzzz";
     a = 35;
     )";
     
@@ -99,16 +102,27 @@ int main() {
  
  
                 if (tknr == "int"){ 
-                	out.push_back({Tok::Int, tknr, false, start_id}); 
+                	out.push_back({Tok::Int, tknr,"", false, start_id}); 
                 	//cout << " zzz \n"; 
                 }
                 else if (tknr == "double") { 
                 
-                 out.push_back({Tok::Double, tknr, false, start_id});  }
+                 out.push_back({Tok::Double, tknr,"", false, start_id});  }
                  
+                else if (tknr == "string") { 
+                
+                 out.push_back({Tok::String, tknr,"", false, start_id});  }     
+        
+        
+                else if (tknr == "str") { 
+                
+                 out.push_back({Tok::String, tknr,"", false, start_id});  }       
+        
+        
+        
                  
                 else  { 
-                out.push_back({Tok::Ident, tknr, false, start_id});
+                out.push_back({Tok::Ident, tknr,"", false, start_id});
    }
     //cout << "  str \n"; 
    
@@ -121,6 +135,16 @@ int main() {
    
     }
    
+      
+   if (tok == '"') { 
+   
+   
+   			out.push_back({Tok::Assign, "\"","", false, a});
+	a++; 
+	continue; 
+   
+   }
+   
    
    
    
@@ -132,8 +156,8 @@ int main() {
    
    }
 		
-	if (tok == '=') { out.push_back({Tok::Assign, "=", false, a}); ++a; continue; }
-	if (tok == ';') { out.push_back({Tok::Semicolon, ";", false, a}); ++a; continue; }
+	if (tok == '=') { out.push_back({Tok::Assign, "=","", false, a}); ++a; continue; }
+	if (tok == ';') { out.push_back({Tok::Semicolon, ";","", false, a}); ++a; continue; }
 	
   	//cout << aq[a] << " \n";
   
