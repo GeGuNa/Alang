@@ -64,7 +64,7 @@ int main() {
     )";
     
    if (!(10>15)) {
-   	cout << "qweqw \n";
+  // 	cout << "qweqw \n";
    } 
    
    
@@ -75,19 +75,89 @@ int main() {
    char tok = aq[a];
    
    
+   
+   if (std::isspace(static_cast<unsigned char>(tok))) { 
+   
+    a++; 
+   // cout << "  space \n"; 
+   continue;  
+   
+   }
+   
+   
+   if (std::isalpha(static_cast<unsigned char>(tok))) { 
+   
+   
+   
+   int start_id = a;
+   
+   
+   while (a < aq.size() && std::isalnum(aq[a]))a++;
+   
+   string tknr = aq.substr(start_id, a - start_id);
+ 
+ 
+ 
+                if (tknr == "int"){ 
+                	out.push_back({Tok::Int, tknr, false, start_id}); 
+                	//cout << " zzz \n"; 
+                }
+                else if (tknr == "double") { 
+                
+                 out.push_back({Tok::Double, tknr, false, start_id});  }
+                 
+                 
+                else  { 
+                out.push_back({Tok::Ident, tknr, false, start_id});
+   }
+    //cout << "  str \n"; 
+   
+    // a++;
+
+   
+   
+   continue;
+   
+   
+    }
+   
+   
+   
+   
+   if (std::isdigit(static_cast<unsigned char>(tok))) { 
+   
+	a++; 
+	// cout << "  int \n"; 
+	continue; 
+   
+   }
+		
+	if (tok == '=') { out.push_back({Tok::Assign, "=", false, a}); ++a; continue; }
+	if (tok == ';') { out.push_back({Tok::Semicolon, ";", false, a}); ++a; continue; }
+	
+  	//cout << aq[a] << " \n";
   
-  	cout << a << " \n";
-  
+  //	if (aq.size() == a) { cout << " out \n"; break; }
   	a++;
    }
     
-    
+   	//cout << aq[a] << " \n";
+   	
+ for (Token& t : out) {
+  	cout << " type: " <<  t.text <<  " \n";
+	}
+   	
+   	
+   	//  Tok kind;
+   // string text;
+   // bool isFloat = false; 
+   // int pos = 0;
     cout  << aq.size() << "\n";
+   // 
+   // print_info(aq);  
     
-    print_info(aq);  
     
-    
-    print_info(str);             
-    print_info("Literal string");
-    print_info({str.data(), 2}); 
+   // print_info(str);             
+   // print_info("Literal string");
+   // print_info({str.data(), 2}); 
 }
