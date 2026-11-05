@@ -2,6 +2,8 @@
 #include <string>
 #include <string_view>
 #include <cctype>
+#include <vector>
+
 
 using namespace std;
 
@@ -27,6 +29,20 @@ struct parser {
 };
 
 
+enum class Tok {
+    Int, Double, Ident, Number,
+    Assign, Semicolon, End
+};
+
+
+struct Token {
+    Tok kind;
+    string text;
+    bool isFloat = false; 
+    int pos = 0;
+};
+
+
 void print_info(std::string_view sv) {
     std::cout << "Length: " << sv.size() << " | Data: " << sv << '\n';
 }
@@ -34,7 +50,8 @@ void print_info(std::string_view sv) {
 int main() {
     string str = "Hello from std::string";
     
-    
+    std::vector<Token> out;
+
     string aq = R"(
     qweqwe
     qweqwe
@@ -55,8 +72,11 @@ int main() {
    int a = 0;
    while (a < aq.size()) {
    
+   char tok = aq[a];
+   
+   
   
-  cout << a << " \n";
+  	cout << a << " \n";
   
   	a++;
    }
