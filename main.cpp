@@ -3,7 +3,7 @@
 #include <string_view>
 #include <cctype>
 #include <vector>
-
+#include "tk.h"
 
 using namespace std;
 
@@ -49,6 +49,11 @@ void print_info(std::string_view sv) {
 }
 
 int main() {
+
+auto qweq1qq = new parwser(); 
+qweq1qq->qq();
+ 
+ 
     string str = "Hello from std::string";
     
     std::vector<Token> out;
