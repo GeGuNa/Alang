@@ -123,7 +123,7 @@ int main() {
                  
                 else  { 
                 out.push_back({Tok::Ident, tknr,"", false, start_id});
-   }
+   				}
     //cout << "  str \n"; 
    
     // a++;
@@ -150,7 +150,35 @@ int main() {
    
    if (std::isdigit(static_cast<unsigned char>(tok))) { 
    
-	a++; 
+   int start_id = a;
+   bool FLtq = false;
+   
+   while (a < aq.size() && std::isalnum(aq[a]))a++;
+   
+   
+   
+   
+   if (aq[a] == '.') {
+   		a++;
+   		
+//cout << "qweqwe yessssssss  \n ";
+
+		while (a < aq.size() && std::isalnum(aq[a]))a++;
+		FLtq = true;
+   }
+   
+   string tknr = aq.substr(start_id, a - start_id);
+
+
+
+if (FLtq)
+	out.push_back({Tok::Int, tknr,"", false, a});
+else 
+	out.push_back({Tok::Double, tknr,"", false, a});
+
+
+
+cout << " yessssssss enddddddddddddddddddddddddd \n ";  
 	// cout << "  int \n"; 
 	continue; 
    
