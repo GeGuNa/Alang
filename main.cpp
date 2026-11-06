@@ -1,9 +1,14 @@
 #include <iostream>
+#include <memory>  
 #include <string>
 #include <string_view>
 #include <cctype>
 #include <vector>
 #include "tk.h"
+
+
+
+
 
 using namespace std;
 
@@ -50,8 +55,12 @@ void print_info(std::string_view sv) {
 
 int main() {
 
-auto qweq1qq = new parwser(); 
+//auto qweq1qq = new parwser(); 
+
+auto qweq1qq = std::make_unique<parwser>();
 qweq1qq->qq();
+ 
+// delete qweq1qq;
  
  
     string str = "Hello from std::string";
