@@ -209,8 +209,12 @@ cout << " yessssssss enddddddddddddddddddddddddd \n ";
 	
 	if (tok == '>') { out.push_back({Tok::Semicolon, ">","", false, a}); ++a; continue; }
 	if (tok == '<') { out.push_back({Tok::Semicolon, "<","", false, a}); ++a; continue; }
-		
-			
+	
+	if (tok == '(') { out.push_back({Tok::Semicolon, "(","", false, a}); ++a; continue; }
+	if (tok == ')') { out.push_back({Tok::Semicolon, ")","", false, a}); ++a; continue; }
+	
+
+	
   	//cout << aq[a] << " \n";
   
   //	if (aq.size() == a) { cout << " out \n"; break; }
