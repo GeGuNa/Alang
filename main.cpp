@@ -71,6 +71,7 @@ qweq1qq->qq();
     
     void qweqe(){ } 
     int qweqwe(){ return 15; }
+     int qweqwe(int a, int b, string d){ return 15; }
     qweqwe
     qweqwe
     qweqweqwe
