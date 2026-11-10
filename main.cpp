@@ -68,6 +68,9 @@ qweq1qq->qq();
     std::vector<Token> out;
 
     string aq = R"(
+    
+    void qweqe(){ } 
+    int qweqwe(){ return 15; }
     qweqwe
     qweqwe
     qweqweqwe
