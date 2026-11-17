@@ -1,0 +1,22 @@
+println("var infers a fixed type from the initializer");
+
+var s = "qq";
+var ss = 15;
+var d = 13.5;
+var flag = true;
+var name = "alang";
+println(s, ss, d, flag, name);
+
+println("reassignment must keep the inferred type");
+ss = 20;
+s = s + "!";
+println(ss, s);
+
+println("dollar sigils create a separate variable");
+var $count = 3;
+int $other = 4;
+int count = 100;
+println($count, $other, count);
+$count = 9;
+count = 7;
+println($count, count);

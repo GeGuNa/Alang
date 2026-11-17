@@ -1,0 +1,26 @@
+println("function parameters");
+
+function qweqwe($qweqwe, $wqeqw) {
+    return $qweqwe + $wqeqw;
+}
+println("qweqwe(2, 3) =", qweqwe(2, 3));
+
+function typed(int a, string b) {
+    return b . a;
+}
+println("typed(5, n=) =", typed(5, "n="));
+
+function mixed(int a, $b) {
+    return a + $b;
+}
+println("mixed(4, 6) =", mixed(4, 6));
+
+var expr = function ($x, $y) {
+    return $x * $y;
+};
+println("expr(3, 7) =", expr(3, 7));
+
+function withString($text, string suffix) {
+    return $text . suffix;
+}
+println(withString("alang", "!"));

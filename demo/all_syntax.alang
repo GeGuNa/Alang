@@ -1,0 +1,96 @@
+println("Alang all syntax");
+
+println("output functions");
+print("print ");
+echo("echo ");
+println("println");
+
+println("declarations");
+int i = 10;
+float f = 2.5;
+double d = 1.25;
+string s = "str";
+str alias = "alias";
+bool flag = true;
+char ch = 'Z';
+var inferred = 7;
+const limit = 100;
+$php = "php";
+println(i, f, d, s, alias, flag, ch, inferred, limit, $php);
+
+println("operators");
+println(i + 5, i - 5, i * 2, i / 3, i % 3);
+println("a" + 1, "b" . 2, 1 . 2 . 3);
+println(i > 5, i >= 10, i < 5, i <= 10, i == 10, i != 10);
+println(true && false, true || false, !false, -i);
+
+println("functions");
+function greet($name) {
+    return "hello " . $name;
+}
+function fib(int n) {
+    if (n <= 1) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+var square = function ($x) {
+    return $x * $x;
+};
+println(greet("world"));
+println("fib(8) =", fib(8));
+println("square(6) =", square(6));
+
+println("control flow");
+if (i < 5) {
+    println("small");
+} else if (i == 10) {
+    println("ten");
+} else {
+    println("other");
+}
+
+int n = 0;
+while (n < 5) {
+    n = n + 1;
+    if (n == 2) {
+        continue;
+    }
+    if (n == 4) {
+        break;
+    }
+    println(n);
+}
+
+for (int k = 0; k < 3; k = k + 1) {
+    println(k);
+}
+
+println("rust style loops");
+int r = 0;
+for {
+    r = r + 1;
+    if (r == 2) {
+        break;
+    }
+    println(r);
+}
+int t = 0;
+while t < 2 {
+    println(t);
+    t = t + 1;
+}
+int u = 0;
+for u < 2 {
+    println(u);
+    u = u + 1;
+}
+
+println("nested loops");
+for (int r = 1; r <= 2; r = r + 1) {
+    for (int c = 1; c <= 2; c = c + 1) {
+        print(r * c);
+        print(" ");
+    }
+    println();
+}

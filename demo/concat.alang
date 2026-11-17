@@ -1,0 +1,22 @@
+println("concatenation with plus");
+string a = "qweqe";
+string b = "qwewqe";
+string c = a + b;
+println(c);
+
+println("php style concatenation with dot");
+var s = "qq";
+string cc = s."";
+println(cc);
+
+var num = 13.5;
+string dd = "qweqweq ".num;
+println(dd);
+println(1 . 2 . 3);
+println("value=" . num . "!");
+
+println("dot works with strings on either side");
+var left = "left";
+var right = "right";
+println(left . right);
+println("prefix" . left . "suffix");

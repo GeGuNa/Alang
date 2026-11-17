@@ -1,0 +1,48 @@
+println("Rust style loops");
+
+println("for with braces is an infinite loop");
+int i = 0;
+for {
+    i = i + 1;
+    if (i == 2) {
+        continue;
+    }
+    if (i == 4) {
+        break;
+    }
+    println(i);
+}
+
+println("while with braces is an infinite loop");
+int j = 0;
+while {
+    j = j + 1;
+    if (j > 2) {
+        break;
+    }
+    println(j);
+}
+
+println("while condition without parentheses");
+int k = 0;
+while k < 3 {
+    println(k);
+    k = k + 1;
+}
+
+println("for condition without parentheses");
+int m = 0;
+for m < 3 {
+    println(m);
+    m = m + 1;
+}
+
+println("classic C style loops still work");
+for (int n = 0; n < 2; n = n + 1) {
+    println(n);
+}
+int p = 0;
+while (p < 2) {
+    println(p);
+    p = p + 1;
+}

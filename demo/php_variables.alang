@@ -1,0 +1,32 @@
+println("PHP style implicit variables");
+
+$name = "eeeeeeee";
+string name = "aaa";
+println($name);
+println(name);
+println("they are different variables");
+
+$count = 3;
+$price = 12.5;
+$enabled = true;
+println($count, $price, $enabled);
+
+$count = $count + 2;
+println($count);
+
+$square = function (int x) {
+    return x * x;
+};
+println("square(5) =", $square(5));
+
+function calculate() {
+    $a = 2;
+    $b = 3;
+    return $a + $b;
+}
+println("calculate() =", calculate());
+
+{
+    $inner = "scoped";
+    println($inner);
+}

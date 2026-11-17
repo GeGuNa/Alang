@@ -1,0 +1,22 @@
+println("arithmetic");
+println(10 + 3);
+println(10 - 3);
+println(10 * 3);
+println(10 / 3);
+println(10 % 3);
+println(10.5 + 2.25);
+println("a" + 1 + "b");
+
+println("comparison");
+println(10 > 3, 10 >= 10, 3 < 10, 3 <= 2);
+println(3 == 3, 3 != 4);
+
+println("logical");
+println(true && false, true || false, !false);
+println(1 < 2 && 2 < 3, 1 > 2 || 3 > 2);
+
+println("unary");
+println(-7, !0, !1);
+
+println("parenthesized expressions");
+println((2 + 3) * 4);

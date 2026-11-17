@@ -1,0 +1,22 @@
+println("typed declarations");
+int a = 15;
+int b = 125;
+float c = 14.3;
+double d = 2.5;
+string greeting = "hello";
+str alias = "str works too";
+bool flag = true;
+char letter = 'x';
+println(a, b, c, d, greeting, alias, flag, letter);
+
+println("declarations without initializers use default values");
+int zero;
+float fzero;
+string empty;
+bool no;
+println(zero, fzero, "[", empty, "]", no);
+
+println("assignment");
+a = 35;
+b = a + 5;
+println(a, b);

@@ -1,0 +1,12 @@
+println("Hello, Alang!");
+println("Built-in output functions: print, echo, println");
+print("print has no newline ");
+println("then println ends the line");
+echo("echo behaves like print ");
+println("done");
+println("string escapes:");
+println("tab:\tend");
+println("newline:\nstart");
+println("quote:\"end");
+println("backslash:\\end");
+println();

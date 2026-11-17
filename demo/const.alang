@@ -1,0 +1,21 @@
+println("constants");
+
+const int max = 100;
+const float rate = 2.5;
+const string title = "Alang";
+const bool enabled = true;
+const char mark = '!';
+println(max, rate, title, enabled, mark);
+
+const inferred = 7 + 3;
+println("inferred =", inferred);
+
+println("constants can be used in expressions");
+println("double max =", max * 2);
+println("label =", title + mark);
+
+{
+    const int local = 42;
+    println("inner local =", local);
+}
+println("outer scope still works:", max);

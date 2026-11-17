@@ -1,0 +1,29 @@
+println("anonymous function assigned with var");
+var q = function () {
+    println("hello from q");
+};
+q();
+
+var add2 = function (int a, int b) {
+    return a + b;
+};
+println("add2(3, 4) =", add2(3, 4));
+
+println("closures capture their defining scope");
+var makeAdder = function (int n) {
+    return function (int x) {
+        return x + n;
+    };
+};
+var add3 = makeAdder(3);
+println("add3(4) =", add3(4));
+
+println("named function form");
+function triple(int n) {
+    return n * 3;
+}
+println("triple(5) =", triple(5));
+
+println("functions are values");
+var f = triple;
+println("f(7) =", f(7));

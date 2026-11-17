@@ -1,249 +1,90 @@
+#include <exception>
+#include <fstream>
 #include <iostream>
-#include <memory>  
+#include <sstream>
 #include <string>
-#include <string_view>
-#include <cctype>
 #include <vector>
-#include "tk.h"
 
+#include "interpreter.h"
+#include "lexer.h"
+#include "parser.h"
+#include "token.hpp"
 
+const char* demoSource =
+    "int add(int a, int b) { return a + b; }\n"
+    "int fact(int n) { if (n <= 1) { return 1; } return n * fact(n - 1); }\n"
+    "int a = 15;\n"
+    "int b = 125;\n"
+    "float c = 14.3;\n"
+    "string greeting = \"hello\";\n"
+    "println(\"a =\", a);\n"
+    "println(\"b =\", b);\n"
+    "println(\"c =\", c);\n"
+    "println(\"sum =\", add(a, b));\n"
+    "println(\"fact(5) =\", fact(5));\n"
+    "println(greeting, \"world\");\n"
+    "if (a < b) { println(\"a is less than b\"); } else { println(\"a is not less than b\"); }\n"
+    "int i = 0;\n"
+    "while (i < 3) { println(\"i =\", i); i = i + 1; }\n"
+    "for (int j = 0; j < 3; j = j + 1) { println(\"j =\", j); }\n"
+    "println(10 > 5, 2 == 2, !false);\n";
 
-
-
-using namespace std;
-
-struct Lexer {
-    string src;
-    int pos;
-    int line;
-
-   // Lexer(string_view s) : src(s), pos(0), line(1) {}
-   // Lexer(string s) : src(s), pos(0), line(1) {}
-   
-    char peek()  { return pos < (int)src.size() ? src[pos] : '\0'; }
-    char peek2() { return pos+1 < (int)src.size() ? src[pos+1] : '\0'; }
-    char advance() { return src[pos++]; }
-    bool atEnd()   { return pos >= (int)src.size(); }
-
-};
-
-struct parser {
-	string src;
-	int pos;
-	int line;
-};
-
-
-enum class Tok {
-    Int, Double, Ident, Number, String,
-    Assign, Semicolon, End
-};
-
-
-struct Token {
-    Tok kind;
-    string text;
-    string value;  
-    bool isFloat = false; 
-    int pos = 0;
-};
-
-
-void print_info(std::string_view sv) {
-    std::cout << "Length: " << sv.size() << " | Data: " << sv << '\n';
+void printTokens(const std::vector<Token>& tokens) {
+    for (const Token& token : tokens) {
+        std::cout << token.line << " " << token.type << " " << token.text << '\n';
+    }
 }
 
-int main() {
+int main(int argc, char** argv) {
+    std::string source;
 
-//auto qweq1qq = new parwser(); 
-
-auto qweq1qq = std::make_unique<parwser>();
-qweq1qq->qq();
- 
-// delete qweq1qq;
- 
- 
-    string str = "Hello from std::string";
-    
-    std::vector<Token> out;
-
-    string aq = R"(
-    
-    void qweqe(){ } 
-    int qweqwe(){ return 15; }
-     int qweqwe(int a, int b, string d){ return 15; }
-    qweqwe
-    qweqwe
-    qweqweqwe
-    
-    int a = 15;
-    int b = 125;
-    float c = 14.3;
-    str a = "qweqweqwe";
-    string bbb = "zzzzzzz";
-    a = 35;
-    )";
-    
-   if (!(10>15)) {
-  // 	cout << "qweqw \n";
-   } 
-   
-   
-   
-   int a = 0;
-   while (a < aq.size()) {
-   
-   char tok = aq[a];
-   
-   
-   
-   if (std::isspace(static_cast<unsigned char>(tok))) { 
-   
-    a++; 
-   // cout << "  space \n"; 
-   continue;  
-   
-   }
-   
-   
-   if (std::isalpha(static_cast<unsigned char>(tok))) { 
-   
-   
-   
-   int start_id = a;
-   
-   
-   while (a < aq.size() && std::isalnum(aq[a]))a++;
-   
-   string tknr = aq.substr(start_id, a - start_id);
- 
- 
- 
-                if (tknr == "int"){ 
-                	out.push_back({Tok::Int, tknr,"", false, start_id}); 
-                	//cout << " zzz \n"; 
+    if (argc > 1) {
+        std::string arg = argv[1];
+        if (arg == "--tokens") {
+            if (argc > 2) {
+                std::ifstream file(argv[2]);
+                if (!file) {
+                    std::cerr << "Cannot open file: " << argv[2] << '\n';
+                    return 1;
                 }
-                else if (tknr == "double") { 
-                
-                 out.push_back({Tok::Double, tknr,"", false, start_id});  }
-                 
-                else if (tknr == "string") { 
-                
-                 out.push_back({Tok::String, tknr,"", false, start_id});  }     
-        
-        
-                else if (tknr == "str") { 
-                
-                 out.push_back({Tok::String, tknr,"", false, start_id});  }       
-        
-        
-        
-                 
-                else  { 
-                out.push_back({Tok::Ident, tknr,"", false, start_id});
-   				}
-    //cout << "  str \n"; 
-   
-    // a++;
+                std::ostringstream stream;
+                stream << file.rdbuf();
+                source = stream.str();
+            } else {
+                source = demoSource;
+            }
+            Lexer lexer(source);
+            printTokens(lexer.tokenize());
+            return 0;
+        }
 
-   
-   
-   continue;
-   
-   
+        std::ifstream file(argv[1]);
+        if (!file) {
+            std::cerr << "Cannot open file: " << argv[1] << '\n';
+            return 1;
+        }
+        std::ostringstream stream;
+        stream << file.rdbuf();
+        source = stream.str();
+    } else {
+        source = demoSource;
     }
-   
-      
-   if (tok == '"') { 
-   
-   
-   			out.push_back({Tok::Assign, "\"","", false, a});
-	a++; 
-	continue; 
-   
-   }
-   
-   
-   
-   
-   if (std::isdigit(static_cast<unsigned char>(tok))) { 
-   
-   int start_id = a;
-   bool FLtq = false;
-   
-   while (a < aq.size() && std::isalnum(aq[a]))a++;
-   
-   
-   
-   
-   if (aq[a] == '.') {
-   		a++;
-   		
-//cout << "qweqwe yessssssss  \n ";
 
-		while (a < aq.size() && std::isalnum(aq[a]))a++;
-		FLtq = true;
-   }
-   
-   string tknr = aq.substr(start_id, a - start_id);
+    try {
+        Lexer lexer(source);
+        Parser parser(lexer.tokenize());
+        std::vector<StmtPtr> program = parser.parse();
+        Interpreter interpreter;
+        for (const StmtPtr& statement : program) {
+            interpreter.executeBlock({statement}, interpreter.globals);
+        }
+    } catch (const LangError& error) {
+        std::cerr << "Error: " << error.what() << '\n';
+        return 1;
+    } catch (const std::exception& error) {
+        std::cerr << "Error: " << error.what() << '\n';
+        return 1;
+    }
 
-
-
-if (FLtq)
-	out.push_back({Tok::Int, tknr,"", false, a});
-else 
-	out.push_back({Tok::Double, tknr,"", false, a});
-
-
-
-cout << " yessssssss enddddddddddddddddddddddddd \n ";  
-	// cout << "  int \n"; 
-	continue; 
-   
-   }
-		
-	if (tok == '=') { out.push_back({Tok::Assign, "=","", false, a}); ++a; continue; }
-	if (tok == ';') { out.push_back({Tok::Semicolon, ";","", false, a}); ++a; continue; }
-	
-	
-	if (tok == '+') { out.push_back({Tok::Semicolon, "+","", false, a}); ++a; continue; }
-	if (tok == '-') { out.push_back({Tok::Semicolon, "-","", false, a}); ++a; continue; }
-	if (tok == '*') { out.push_back({Tok::Semicolon, "*","", false, a}); ++a; continue; }
-	if (tok == '/') { out.push_back({Tok::Semicolon, "/","", false, a}); ++a; continue; }
-	
-	if (tok == '>') { out.push_back({Tok::Semicolon, ">","", false, a}); ++a; continue; }
-	if (tok == '<') { out.push_back({Tok::Semicolon, "<","", false, a}); ++a; continue; }
-	
-	if (tok == '(') { out.push_back({Tok::Semicolon, "(","", false, a}); ++a; continue; }
-	if (tok == ')') { out.push_back({Tok::Semicolon, ")","", false, a}); ++a; continue; }
-	
-	if (tok == '{') { out.push_back({Tok::Semicolon, "{","", false, a}); ++a; continue; }
-	if (tok == '}') { out.push_back({Tok::Semicolon, "}","", false, a}); ++a; continue; }
-	
-	
-  	//cout << aq[a] << " \n";
-  
-  //	if (aq.size() == a) { cout << " out \n"; break; }
-  	a++;
-   }
-    
-   	//cout << aq[a] << " \n";
-   	
- for (Token& t : out) {
-  	cout << " type: " <<  t.text <<  " \n";
-	}
-   	
-   	
-   	//  Tok kind;
-   // string text;
-   // bool isFloat = false; 
-   // int pos = 0;
-    cout  << aq.size() << "\n";
-   // 
-   // print_info(aq);  
-    
-    
-   // print_info(str);             
-   // print_info("Literal string");
-   // print_info({str.data(), 2}); 
+    return 0;
 }

@@ -1,0 +1,31 @@
+println("else if chains");
+
+int score = 75;
+if (score >= 90) {
+    println("A");
+} else if (score >= 80) {
+    println("B");
+} else if (score >= 70) {
+    println("C");
+} else if (score >= 60) {
+    println("D");
+} else {
+    println("F");
+}
+
+score = 45;
+if (score >= 90) { println("A"); } else if (score >= 60) { println("D"); } else { println("F"); }
+
+score = 70;
+if (score == 70) { println("matched first branch"); } else if (score >= 60) { println("never reached"); }
+
+println("nested if with else binds to the nearest if");
+if (true) {
+    if (false) {
+        println("inner true");
+    } else {
+        println("inner else");
+    }
+} else {
+    println("outer else");
+}

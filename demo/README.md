@@ -1,0 +1,27 @@
+# Alang demo programs
+
+Run any example from the repository root:
+
+    ./prog demo/all_syntax.alang
+    ./prog demo/hello.alang
+    ./prog demo/variables.alang
+    ./prog demo/operators.alang
+    ./prog demo/concat.alang
+    ./prog demo/functions.alang
+    ./prog demo/function_expressions.alang
+    ./prog demo/parameters.alang
+    ./prog demo/control_flow.alang
+    ./prog demo/rust_loops.alang
+    ./prog demo/else_if.alang
+    ./prog demo/const.alang
+    ./prog demo/var_inference.alang
+    ./prog demo/php_variables.alang
+    ./prog demo/showcase.alang
+
+`all_syntax.alang` is the single combined program that exercises every supported feature. The other files focus on one area each.
+
+To inspect how a file is tokenized:
+
+    ./prog --tokens demo/all_syntax.alang
+
+Each file prints section headers at runtime, so you can see which syntax is being exercised.

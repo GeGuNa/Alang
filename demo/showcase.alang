@@ -1,0 +1,43 @@
+println("Alang syntax showcase");
+
+int base = 6;
+float rate = 1.5;
+string label = "score";
+bool active = true;
+char grade = 'A';
+println(label, base, rate, active, grade);
+
+int square(int n) {
+    return n * n;
+}
+
+int fib(int n) {
+    if (n <= 1) {
+        return n;
+    }
+    return fib(n - 1) + fib(n - 2);
+}
+
+println("square(9) =", square(9));
+println("fib(10) =", fib(10));
+println("combined =", square(4) + fib(7));
+
+int total = 0;
+for (int i = 1; i <= 5; i = i + 1) {
+    total = total + i;
+}
+println("sum 1..5 =", total);
+
+int countdown = 3;
+while (countdown > 0) {
+    println("tick", countdown);
+    countdown = countdown - 1;
+}
+
+if (total == 15 && active) {
+    println("all checks passed");
+} else {
+    println("something failed");
+}
+
+println("string concat:", label, "=", 100);

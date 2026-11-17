@@ -1,0 +1,37 @@
+println("if and else");
+int x = 7;
+if (x > 10) {
+    println("big");
+} else {
+    println("small");
+}
+if (x == 7) {
+    println("seven");
+}
+
+println("while with break and continue");
+int i = 0;
+while (i < 5) {
+    i = i + 1;
+    if (i == 2) {
+        continue;
+    }
+    if (i == 4) {
+        break;
+    }
+    println(i);
+}
+
+println("for loop");
+for (int j = 0; j < 4; j = j + 1) {
+    println(j);
+}
+
+println("nested loops");
+for (int row = 1; row <= 3; row = row + 1) {
+    for (int col = 1; col <= 3; col = col + 1) {
+        print(row * col);
+        print(" ");
+    }
+    println();
+}
