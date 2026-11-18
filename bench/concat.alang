@@ -1,0 +1,5 @@
+var s = "";
+for (int i = 0; i < 20000; i = i + 1) {
+    s = s . "x";
+}
+println(s);

@@ -1,0 +1,10 @@
+class Counter {
+    private $n = 0;
+    function add($x) { $this->n = $this->n + $x; return $this->n; }
+}
+var c = new Counter();
+int total = 0;
+for (int i = 0; i < 1000000; i = i + 1) {
+    total = c->add(1);
+}
+println(total);

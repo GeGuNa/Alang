@@ -1,0 +1,1 @@
+println("x" . 5 . true . null . 2.5);

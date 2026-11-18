@@ -1,0 +1,8 @@
+class Node {
+    public $name = "root";
+    public $next = null;
+    function link($other) { $this->next = $other; }
+}
+var a = new Node();
+a->link(a);
+println(a->next->name);

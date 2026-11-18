@@ -1,0 +1,13 @@
+namespace stD {
+    class Vec { public $x = 7; function get() { return $this->x; } }
+    function hello() { return "hello"; }
+    const PI = 3;
+}
+println(stD::PI, stD::hello());
+using namespace stD;
+var v = new Vec();
+println(v->get(), hello(), PI);
+namespace outer {
+    namespace inner { const VALUE = 9; }
+}
+println(outer::inner::VALUE);

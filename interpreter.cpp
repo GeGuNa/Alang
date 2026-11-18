@@ -1,6 +1,8 @@
 #include "interpreter.h"
 
+#include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <exception>
 #include <iostream>
 #include <sstream>
@@ -55,11 +57,17 @@ bool truthy(const Value& value) {
         case ValueType::Int: return value.ival != 0;
         case ValueType::Double: return value.dval != 0.0;
         case ValueType::Bool: return value.bval;
-        case ValueType::String: return !value.sval.empty();
-        case ValueType::Function: return static_cast<bool>(value.fval);
-        case ValueType::Object: return static_cast<bool>(value.oval);
-        case ValueType::Class: return static_cast<bool>(value.cval);
-        case ValueType::Namespace: return static_cast<bool>(value.nval);
+        case ValueType::String: return !value.str().empty();
+        case ValueType::Function: return static_cast<bool>(value.fnPtr());
+        case ValueType::Object: return static_cast<bool>(value.objPtr());
+        case ValueType::ObjectWeak: {
+            std::shared_ptr<WeakObjectRef> ref = value.weakRef();
+            return ref && !ref->ref.expired();
+        }
+        case ValueType::Class: return static_cast<bool>(value.clsPtr());
+        case ValueType::Namespace: return static_cast<bool>(value.nsPtr());
+        case ValueType::Future: return static_cast<bool>(value.futurePtr());
+        case ValueType::Thread: return static_cast<bool>(value.threadPtr());
     }
     return false;
 }
@@ -71,7 +79,7 @@ double asNumber(const Value& value) {
         case ValueType::Bool: return value.bval ? 1.0 : 0.0;
         case ValueType::String:
             try {
-                return std::stod(value.sval);
+                return std::stod(value.str());
             } catch (const std::exception&) {
                 return 0.0;
             }
@@ -79,8 +87,11 @@ double asNumber(const Value& value) {
         case ValueType::Null: return 0.0;
         case ValueType::Function: return 0.0;
         case ValueType::Object: return 0.0;
+        case ValueType::ObjectWeak: return 0.0;
         case ValueType::Class: return 0.0;
         case ValueType::Namespace: return 0.0;
+        case ValueType::Future: return 0.0;
+        case ValueType::Thread: return 0.0;
     }
     return 0.0;
 }
@@ -96,43 +107,59 @@ std::string valueToString(const Value& value) {
             return stream.str();
         }
         case ValueType::Bool: return value.bval ? "true" : "false";
-        case ValueType::String: return value.sval;
+        case ValueType::String: return value.str();
         case ValueType::Function: return "<function>";
+        case ValueType::ObjectWeak: {
+            Value resolved = resolveObject(value);
+            if (resolved.objPtr() && resolved.objPtr()->classInfo) {
+                return "<" + resolved.objPtr()->classInfo->name + " object>";
+            }
+            return "<object>";
+        }
         case ValueType::Object: {
             Value resolved = resolveObject(value);
-            if (resolved.oval && resolved.oval->classInfo) {
-                return "<" + resolved.oval->classInfo->name + " object>";
+            if (resolved.objPtr() && resolved.objPtr()->classInfo) {
+                return "<" + resolved.objPtr()->classInfo->name + " object>";
             }
             return "<object>";
         }
         case ValueType::Class:
-            if (value.cval) {
-                return "class " + value.cval->name;
+            if (value.clsPtr()) {
+                return "class " + value.clsPtr()->name;
             }
             return "<class>";
         case ValueType::Namespace:
-            if (value.nval) {
-                return "namespace " + value.nval->name;
+            if (value.nsPtr()) {
+                return "namespace " + value.nsPtr()->name;
             }
             return "<namespace>";
+        case ValueType::Future: return "<future>";
+        case ValueType::Thread: return "<thread>";
     }
     return "";
 }
 
 bool valuesEqual(const Value& left, const Value& right) {
-    if (left.type == ValueType::Object || right.type == ValueType::Object) {
+    if (left.type == ValueType::Object || right.type == ValueType::Object ||
+        left.type == ValueType::ObjectWeak || right.type == ValueType::ObjectWeak) {
         Value a = resolveObject(left);
         Value b = resolveObject(right);
-        return a.oval == b.oval;
+        return a.objPtr() == b.objPtr();
     }
     if (left.type == ValueType::Class || right.type == ValueType::Class) {
-        return left.cval == right.cval;
+        return left.clsPtr() == right.clsPtr();
     }
     if (left.type == ValueType::Namespace || right.type == ValueType::Namespace) {
-        return left.nval == right.nval;
+        return left.nsPtr() == right.nsPtr();
+    }
+    if (left.type == ValueType::Future || right.type == ValueType::Future) {
+        return left.futurePtr() == right.futurePtr();
+    }
+    if (left.type == ValueType::Thread || right.type == ValueType::Thread) {
+        return left.threadPtr() == right.threadPtr();
     }
     if (left.type == ValueType::Function || right.type == ValueType::Function) {
-        return left.fval == right.fval;
+        return left.fnPtr() == right.fnPtr();
     }
     if (left.type == ValueType::String || right.type == ValueType::String) {
         return valueToString(left) == valueToString(right);
@@ -151,8 +178,8 @@ bool valuesEqual(const Value& left, const Value& right) {
 
 int compareValues(const Value& left, const Value& right) {
     if (left.type == ValueType::String && right.type == ValueType::String) {
-        if (left.sval < right.sval) return -1;
-        if (left.sval > right.sval) return 1;
+        if (left.str() < right.str()) return -1;
+        if (left.str() > right.str()) return 1;
         return 0;
     }
     double a = asNumber(left);
@@ -176,8 +203,8 @@ Value defaultValue(TokType type) {
 }
 
 void detachSelfCapture(Value& value, Environment* scope) {
-    if (value.type == ValueType::Function && value.fval && value.fval->closure.get() == scope) {
-        value.fval->closure.reset();
+    if (value.type == ValueType::Function && value.fnPtr() && value.fnPtr()->closure.get() == scope) {
+        value.fnPtr()->closure.reset();
     }
 }
 
@@ -212,12 +239,36 @@ void Environment::defineInferred(const std::string& name, const Value& value) {
     inferredTypes[name] = value.type;
 }
 
+Value* Environment::cachedValue(const std::string& name) const {
+    for (std::size_t i = 0; i < cacheValues.size(); ++i) {
+        if (cacheValues[i] != nullptr && cacheKeys[i] == name) {
+            return cacheValues[i];
+        }
+    }
+    return nullptr;
+}
+
+void Environment::rememberValue(const std::string& name, Value* value) const {
+    std::size_t slot = cacheCursor % cacheValues.size();
+    cacheKeys[slot] = name;
+    cacheValues[slot] = value;
+    ++cacheCursor;
+}
+
 bool Environment::get(const std::string& name, Value& out) const {
+    if (Value* cached = cachedValue(name)) {
+        out = *cached;
+        return true;
+    }
+
     const Environment* current = this;
     std::shared_ptr<Environment> held;
     while (current != nullptr) {
         auto it = current->values.find(name);
         if (it != current->values.end()) {
+            if (current == this) {
+                rememberValue(name, const_cast<Value*>(&it->second));
+            }
             out = it->second;
             return true;
         }
@@ -235,11 +286,26 @@ bool Environment::get(const std::string& name, Value& out) const {
 }
 
 bool Environment::assign(const std::string& name, const Value& value) {
+    if (Value* cached = cachedValue(name)) {
+        if (constants.count(name) != 0) {
+            throw LangError("Cannot assign to constant: " + name);
+        }
+        auto typeIt = inferredTypes.find(name);
+        if (typeIt != inferredTypes.end() && typeIt->second != value.type) {
+            throw LangError("Type mismatch for variable: " + name);
+        }
+        *cached = value;
+        return true;
+    }
+
     Environment* current = this;
     std::shared_ptr<Environment> held;
     while (current != nullptr) {
         auto it = current->values.find(name);
         if (it != current->values.end()) {
+            if (current == this) {
+                rememberValue(name, &it->second);
+            }
             if (current->constants.count(name) != 0) {
                 throw LangError("Cannot assign to constant: " + name);
             }
@@ -277,7 +343,7 @@ struct EnvGuard {
 Value makeFunctionValue(const FunctionValue& function) {
     Value value;
     value.type = ValueType::Function;
-    value.fval = std::make_shared<FunctionValue>(function);
+    value.payload = std::make_shared<FunctionValue>(function);
     return value;
 }
 
@@ -293,14 +359,14 @@ std::vector<Value> evaluateArguments(const std::vector<ExprPtr>& expressions, In
 Value makeObjectValue(const std::shared_ptr<ObjectInstance>& object) {
     Value value;
     value.type = ValueType::Object;
-    value.oval = object;
+    value.payload = object;
     return value;
 }
 
 Value makeNamespaceValue(const std::shared_ptr<NamespaceInfo>& info) {
     Value value;
     value.type = ValueType::Namespace;
-    value.nval = info;
+    value.payload = info;
     return value;
 }
 
@@ -362,19 +428,27 @@ std::shared_ptr<NamespaceInfo> findNamespace(Interpreter& interpreter, const std
 }
 
 Value resolveObject(const Value& value) {
-    if (value.type == ValueType::Object && !value.oval && !value.woval.expired()) {
-        Value resolved = value;
-        resolved.oval = value.woval.lock();
-        return resolved;
+    if (value.type == ValueType::ObjectWeak) {
+        std::shared_ptr<WeakObjectRef> ref = value.weakRef();
+        std::shared_ptr<ObjectInstance> locked = ref ? ref->ref.lock() : nullptr;
+        if (locked) {
+            Value resolved;
+            resolved.type = ValueType::Object;
+            resolved.payload = locked;
+            return resolved;
+        }
+        return makeNull();
     }
     return value;
 }
 
 Value storeObject(const Value& value) {
-    if (value.type == ValueType::Object && value.oval) {
+    if (value.type == ValueType::Object && value.objPtr()) {
         Value stored;
-        stored.type = ValueType::Object;
-        stored.woval = value.oval;
+        stored.type = ValueType::ObjectWeak;
+        auto ref = std::make_shared<WeakObjectRef>();
+        ref->ref = value.objPtr();
+        stored.payload = ref;
         return stored;
     }
     return value;
@@ -384,17 +458,10 @@ Value LiteralExpr::eval(Interpreter&) {
     return value;
 }
 
-Value VarExpr::eval(Interpreter& interpreter) {
-    Value value;
-    if (interpreter.environment->get(name, value)) {
-        return value;
-    }
-
-    auto nativeIt = interpreter.natives.find(name);
-    if (nativeIt != interpreter.natives.end()) {
-        FunctionValue function;
-        function.nativeName = name;
-        return makeFunctionValue(function);
+Value resolveName(Interpreter& interpreter, const std::string& name) {
+    auto nativeValueIt = interpreter.nativeValues.find(name);
+    if (nativeValueIt != interpreter.nativeValues.end()) {
+        return nativeValueIt->second;
     }
 
     auto functionIt = interpreter.functions.find(name);
@@ -406,7 +473,7 @@ Value VarExpr::eval(Interpreter& interpreter) {
     if (classIt != interpreter.classes.end()) {
         Value classValue;
         classValue.type = ValueType::Class;
-        classValue.cval = classIt->second;
+        classValue.payload = classIt->second;
         return classValue;
     }
 
@@ -419,7 +486,7 @@ Value VarExpr::eval(Interpreter& interpreter) {
         if (classInside != used->classes.end()) {
             Value classValue;
             classValue.type = ValueType::Class;
-            classValue.cval = classInside->second;
+            classValue.payload = classInside->second;
             return classValue;
         }
         auto constantIt = used->constants.find(name);
@@ -434,6 +501,14 @@ Value VarExpr::eval(Interpreter& interpreter) {
     }
 
     throw LangError("Undefined variable: " + name);
+}
+
+Value VarExpr::eval(Interpreter& interpreter) {
+    Value value;
+    if (interpreter.environment->get(name, value)) {
+        return value;
+    }
+    return resolveName(interpreter, name);
 }
 
 void VarExpr::assign(Interpreter& interpreter, const Value& value) {
@@ -550,10 +625,10 @@ Value CallExpr::eval(Interpreter& interpreter) {
         args.push_back(argument->eval(interpreter));
     }
 
-    if (target.type != ValueType::Function || !target.fval) {
+    if (target.type != ValueType::Function || !target.fnPtr()) {
         throw LangError("Attempt to call a non-function value");
     }
-    return interpreter.callFunctionValue(*target.fval, args);
+    return interpreter.callFunctionValue(*target.fnPtr(), args);
 }
 
 Value FunctionExpr::eval(Interpreter& interpreter) {
@@ -561,7 +636,12 @@ Value FunctionExpr::eval(Interpreter& interpreter) {
     function.parameters = parameters;
     function.body = body;
     function.closure = interpreter.environment;
+    function.isAsync = isAsync;
     return makeFunctionValue(function);
+}
+
+Value AwaitExpr::eval(Interpreter& interpreter) {
+    return interpreter.awaitValue(value->eval(interpreter));
 }
 
 Value ThisExpr::eval(Interpreter& interpreter) {
@@ -580,20 +660,16 @@ Value ParentExpr::eval(Interpreter& interpreter) {
     }
     Value value;
     value.type = ValueType::Class;
-    value.cval = info->parent;
+    value.payload = info->parent;
     return value;
 }
 
-Value NewExpr::eval(Interpreter& interpreter) {
-    std::shared_ptr<ClassInfo> classInfo = findClassInfo(interpreter, className);
-    if (!classInfo) {
-        throw LangError("Undefined class: " + className);
-    }
-
-    std::vector<Value> args = evaluateArguments(arguments, interpreter);
+Value createObject(Interpreter& interpreter, const std::shared_ptr<ClassInfo>& classInfo,
+                   const std::vector<Value>& args) {
+    bool isThread = classInfo->name == "Thread";
     bool hasConstructor = findMethod(classInfo.get(), "__construct") != nullptr;
-    if (!hasConstructor && !args.empty()) {
-        throw LangError("Class " + className + " has no constructor");
+    if (!hasConstructor && !isThread && !args.empty()) {
+        throw LangError("Class " + classInfo->name + " has no constructor");
     }
 
     std::weak_ptr<Interpreter> weakInterpreter = interpreter.weak_from_this();
@@ -605,7 +681,7 @@ Value NewExpr::eval(Interpreter& interpreter) {
                     findMethod(raw->classInfo.get(), "__destruct") != nullptr) {
                     Value self;
                     self.type = ValueType::Object;
-                    self.oval = std::shared_ptr<ObjectInstance>(raw, [](ObjectInstance*) {});
+                    self.payload = std::shared_ptr<ObjectInstance>(raw, [](ObjectInstance*) {});
                     try {
                         owner->callMethod(self, "__destruct", {});
                     } catch (...) {
@@ -618,27 +694,41 @@ Value NewExpr::eval(Interpreter& interpreter) {
 
     object->classInfo = classInfo;
     object->properties = object->classInfo->defaultProperties;
+    if (classInfo->name == "Thread" && !args.empty()) {
+        object->properties["__fn"] = args[0];
+    }
     Value instance = makeObjectValue(object);
 
     if (hasConstructor) {
         interpreter.callMethod(instance, "__construct", args);
     }
+    if (isThread && args.empty()) {
+        object->properties["__fn"] = makeVoid();
+    }
     object->constructed = true;
     return instance;
 }
 
+Value NewExpr::eval(Interpreter& interpreter) {
+    std::shared_ptr<ClassInfo> classInfo = findClassInfo(interpreter, className);
+    if (!classInfo) {
+        throw LangError("Undefined class: " + className);
+    }
+    return createObject(interpreter, classInfo, evaluateArguments(arguments, interpreter));
+}
+
 Value MemberExpr::eval(Interpreter& interpreter) {
     Value object = resolveObject(this->object->eval(interpreter));
-    if (object.type != ValueType::Object || !object.oval) {
+    if (object.type != ValueType::Object || !object.objPtr()) {
         throw LangError("Attempt to access a member on a non-object");
     }
 
-    const std::shared_ptr<ClassInfo>& info = object.oval->classInfo;
+    const std::shared_ptr<ClassInfo>& info = object.objPtr()->classInfo;
     std::string visibility = findPropertyVisibility(info.get(), name);
     interpreter.checkVisibility(info->name, visibility);
 
-    auto it = object.oval->properties.find(name);
-    if (it == object.oval->properties.end()) {
+    auto it = object.objPtr()->properties.find(name);
+    if (it == object.objPtr()->properties.end()) {
         throw LangError("Undefined property: " + info->name + "->" + name);
     }
     return it->second;
@@ -646,16 +736,16 @@ Value MemberExpr::eval(Interpreter& interpreter) {
 
 void MemberExpr::assign(Interpreter& interpreter, const Value& value) {
     Value object = resolveObject(this->object->eval(interpreter));
-    if (object.type != ValueType::Object || !object.oval) {
+    if (object.type != ValueType::Object || !object.objPtr()) {
         throw LangError("Attempt to set a member on a non-object");
     }
 
-    const std::shared_ptr<ClassInfo>& info = object.oval->classInfo;
+    const std::shared_ptr<ClassInfo>& info = object.objPtr()->classInfo;
     std::string visibility = findPropertyVisibility(info.get(), name);
     interpreter.checkVisibility(info->name, visibility);
 
-    auto it = object.oval->properties.find(name);
-    if (it == object.oval->properties.end()) {
+    auto it = object.objPtr()->properties.find(name);
+    if (it == object.objPtr()->properties.end()) {
         throw LangError("Undefined property: " + info->name + "->" + name);
     }
     it->second = storeObject(value);
@@ -664,8 +754,8 @@ void MemberExpr::assign(Interpreter& interpreter, const Value& value) {
 Value StaticMemberExpr::eval(Interpreter& interpreter) {
     Value owner = classExpr->eval(interpreter);
 
-    if (owner.type == ValueType::Namespace && owner.nval) {
-        const std::shared_ptr<NamespaceInfo>& info = owner.nval;
+    if (owner.type == ValueType::Namespace && owner.nsPtr()) {
+        const std::shared_ptr<NamespaceInfo>& info = owner.nsPtr();
         auto nested = info->namespaces.find(name);
         if (nested != info->namespaces.end()) {
             return makeNamespaceValue(nested->second);
@@ -674,7 +764,7 @@ Value StaticMemberExpr::eval(Interpreter& interpreter) {
         if (classIt != info->classes.end()) {
             Value value;
             value.type = ValueType::Class;
-            value.cval = classIt->second;
+            value.payload = classIt->second;
             return value;
         }
         auto functionIt = info->functions.find(name);
@@ -688,43 +778,49 @@ Value StaticMemberExpr::eval(Interpreter& interpreter) {
         throw LangError("Undefined namespace member: " + info->name + "::" + name);
     }
 
-    if (owner.type != ValueType::Class || !owner.cval) {
+    if (owner.type != ValueType::Class || !owner.clsPtr()) {
         throw LangError("Attempt to access a static member on a non-class");
     }
 
-    const Value* constant = findConstant(owner.cval.get(), name);
+    const Value* constant = findConstant(owner.clsPtr().get(), name);
     if (constant) {
         return *constant;
     }
-    throw LangError("Undefined static member: " + owner.cval->name + "::" + name);
+    throw LangError("Undefined static member: " + owner.clsPtr()->name + "::" + name);
 }
 
 Value MemberCallExpr::eval(Interpreter& interpreter) {
     Value object = resolveObject(this->object->eval(interpreter));
-    return interpreter.callMethod(object, name, evaluateArguments(arguments, interpreter));
+    std::vector<Value> args = evaluateArguments(arguments, interpreter);
+    bool handled = false;
+    Value special = interpreter.threadMethod(object, name, args.data(), static_cast<int>(args.size()), handled);
+    if (handled) {
+        return special;
+    }
+    return interpreter.callMethod(object, name, args);
 }
 
 Value StaticCallExpr::eval(Interpreter& interpreter) {
     Value owner = classExpr->eval(interpreter);
     std::vector<Value> args = evaluateArguments(arguments, interpreter);
 
-    if (owner.type == ValueType::Namespace && owner.nval) {
-        auto it = owner.nval->functions.find(name);
-        if (it == owner.nval->functions.end()) {
-            throw LangError("Undefined namespace function: " + owner.nval->name + "::" + name);
+    if (owner.type == ValueType::Namespace && owner.nsPtr()) {
+        auto it = owner.nsPtr()->functions.find(name);
+        if (it == owner.nsPtr()->functions.end()) {
+            throw LangError("Undefined namespace function: " + owner.nsPtr()->name + "::" + name);
         }
         return interpreter.callFunctionValue(it->second, args);
     }
 
-    if (owner.type != ValueType::Class || !owner.cval) {
+    if (owner.type != ValueType::Class || !owner.clsPtr()) {
         throw LangError("Attempt to call a static method on a non-class");
     }
 
-    const FunctionValue* method = findMethod(owner.cval.get(), name);
+    const FunctionValue* method = findMethod(owner.clsPtr().get(), name);
     if (method && !method->isStatic && interpreter.currentThis().type == ValueType::Object) {
-        return interpreter.callMethodFrom(owner.cval, interpreter.currentThis(), name, args);
+        return interpreter.callMethodFrom(owner.clsPtr(), interpreter.currentThis(), name, args);
     }
-    return interpreter.callStaticMethod(owner.cval, name, args);
+    return interpreter.callStaticMethod(owner.clsPtr(), name, args);
 }
 
 ExecResult EmptyStmt::exec(Interpreter&) {
@@ -758,6 +854,9 @@ ExecResult VarDeclStmt::exec(Interpreter& interpreter) {
 }
 
 ExecResult BlockStmt::exec(Interpreter& interpreter) {
+    if (!needsScope) {
+        return interpreter.executeBlock(statements, interpreter.environment);
+    }
     auto scope = std::make_shared<Environment>(interpreter.environment);
     return interpreter.executeBlock(statements, scope);
 }
@@ -890,6 +989,7 @@ ExecResult ClassDeclStmt::exec(Interpreter& interpreter) {
         function.className = name;
         function.visibility = method.visibility;
         function.isStatic = method.isStatic;
+        function.isAsync = false;
         info->methods[method.name] = std::move(function);
     }
 
@@ -970,6 +1070,20 @@ Interpreter::Interpreter() {
         std::cout << '\n';
         return makeVoid();
     };
+
+    for (const auto& entry : natives) {
+        FunctionValue function;
+        function.nativeName = entry.first;
+        nativeValues[entry.first] = makeFunctionValue(function);
+    }
+
+    auto threadClass = std::make_shared<ClassInfo>();
+    threadClass->name = "Thread";
+    threadClass->defaultProperties["__fn"] = makeVoid();
+    threadClass->defaultProperties["__future"] = makeVoid();
+    threadClass->methods["start"] = FunctionValue{};
+    threadClass->methods["join"] = FunctionValue{};
+    classes["Thread"] = threadClass;
 }
 
 ExecResult Interpreter::executeBlock(const std::vector<StmtPtr>& statements, std::shared_ptr<Environment> env) {
@@ -983,6 +1097,72 @@ ExecResult Interpreter::executeBlock(const std::vector<StmtPtr>& statements, std
         }
     }
     return ExecResult{};
+}
+
+Value Interpreter::callNative(const std::string& name, const Value* args, int argc) {
+    auto it = natives.find(name);
+    if (it == natives.end()) {
+        throw LangError("Undefined function: " + name);
+    }
+    std::vector<Value> copied(args, args + argc);
+    return it->second(*this, copied);
+}
+
+Value Interpreter::createObjectFrom(const std::shared_ptr<ClassInfo>& info, const Value* args, int argc) {
+    std::vector<Value> copied(args, args + argc);
+    return createObject(*this, info, copied);
+}
+
+Value Interpreter::invokeFunctionValue(const FunctionValue& function, const Value* args, int argc,
+                                       const Value& self, const std::string& selfClass) {
+    if (function.isAsync && self.type != ValueType::Object) {
+        return spawnAsync(function, args, argc);
+    }
+    if (!function.nativeName.empty()) {
+        return callNative(function.nativeName, args, argc);
+    }
+    if (function.chunk) {
+        return executeChunk(*function.chunk, args, argc, self, selfClass);
+    }
+    std::vector<Value> copied(args, args + argc);
+    return callFunctionValue(function, copied);
+}
+
+Value Interpreter::invokeMethod(const std::shared_ptr<ClassInfo>& info, const Value& object,
+                                const std::string& name, const Value* args, int argc) {
+    const FunctionValue* method = findMethod(info.get(), name);
+    if (!method) throw LangError("Undefined method: " + info->name + "::" + name);
+    checkVisibility(info->name, method->visibility);
+    if (method->chunk) {
+        return executeChunk(*method->chunk, args, argc, object, info->name);
+    }
+    std::vector<Value> copied(args, args + argc);
+    return callMethodFrom(info, object, name, copied);
+}
+
+Value Interpreter::invokeStatic(const std::shared_ptr<ClassInfo>& info, const std::string& name,
+                                const Value* args, int argc, const Value& self,
+                                const std::string& selfClass) {
+    const FunctionValue* method = findMethod(info.get(), name);
+    if (!method) throw LangError("Undefined method: " + info->name + "::" + name);
+    checkVisibility(info->name, method->visibility);
+    if (!method->isStatic && self.type == ValueType::Object) {
+        if (method->chunk) return executeChunk(*method->chunk, args, argc, self, selfClass);
+        std::vector<Value> copied(args, args + argc);
+        return callMethodFrom(info, self, name, copied);
+    }
+    if (method->chunk) return executeChunk(*method->chunk, args, argc, makeVoid(), "");
+    std::vector<Value> copied(args, args + argc);
+    return callStaticMethod(info, name, copied);
+}
+
+Value Interpreter::invokeNamespaceFunction(const std::shared_ptr<NamespaceInfo>& info,
+                                           const std::string& name, const Value* args, int argc) {
+    auto it = info->functions.find(name);
+    if (it == info->functions.end()) {
+        throw LangError("Undefined namespace function: " + info->name + "::" + name);
+    }
+    return invokeFunctionValue(it->second, args, argc, makeVoid(), "");
 }
 
 Value Interpreter::callFunctionValue(const FunctionValue& function, const std::vector<Value>& args) {
@@ -1019,9 +1199,9 @@ Value Interpreter::callFunctionValue(const FunctionValue& function, const std::v
 void collectLiveObjects(const Value& value, std::vector<std::shared_ptr<ObjectInstance>>& objects,
                         std::unordered_set<ObjectInstance*>& seen) {
     Value resolved = resolveObject(value);
-    if (resolved.type == ValueType::Object && resolved.oval && !resolved.oval->destructed &&
-        seen.insert(resolved.oval.get()).second) {
-        objects.push_back(resolved.oval);
+    if (resolved.type == ValueType::Object && resolved.objPtr() && !resolved.objPtr()->destructed &&
+        seen.insert(resolved.objPtr().get()).second) {
+        objects.push_back(resolved.objPtr());
     }
 }
 
@@ -1051,6 +1231,10 @@ void Interpreter::shutdown() {
             if (auto global = env->globalParent.lock()) {
                 environments.push_back(global.get());
             }
+        }
+
+        for (const auto& value : vmGlobals) {
+            collectLiveObjects(value, objects, seenObjects);
         }
 
         for (const auto& entry : classes) {
@@ -1085,7 +1269,7 @@ void Interpreter::shutdown() {
             }
             Value self;
             self.type = ValueType::Object;
-            self.oval = object;
+            self.payload = object;
             try {
                 callMethod(self, "__destruct", {});
             } catch (...) {
@@ -1151,10 +1335,10 @@ void Interpreter::checkVisibility(const std::string& ownerClass, const std::stri
 
 Value Interpreter::callMethod(const Value& objectValue, const std::string& name, const std::vector<Value>& args) {
     Value object = resolveObject(objectValue);
-    if (object.type != ValueType::Object || !object.oval) {
+    if (object.type != ValueType::Object || !object.objPtr()) {
         throw LangError("Attempt to call a method on a non-object");
     }
-    return callMethodFrom(object.oval->classInfo, object, name, args);
+    return callMethodFrom(object.objPtr()->classInfo, object, name, args);
 }
 
 Value Interpreter::callMethodFrom(const std::shared_ptr<ClassInfo>& info, const Value& object,
@@ -1179,8 +1363,8 @@ Value Interpreter::callMethodFrom(const std::shared_ptr<ClassInfo>& info, const 
     }
 
     std::string actualClass = info->name;
-    if (object.type == ValueType::Object && object.oval && object.oval->classInfo) {
-        actualClass = object.oval->classInfo->name;
+    if (object.type == ValueType::Object && object.objPtr() && object.objPtr()->classInfo) {
+        actualClass = object.objPtr()->classInfo->name;
     }
     ThisGuard guard(*this, object, actualClass);
     ExecResult result = executeBlock(function.body->statements, scope);
@@ -1215,5 +1399,600 @@ Value Interpreter::callStaticMethod(const std::shared_ptr<ClassInfo>& info, cons
     if (result.flow == Flow::Return) {
         return result.value;
     }
+    return makeVoid();
+}
+
+Value vmBinary(Op op, const Value& leftValue, const Value& rightValue) {
+    switch (op) {
+        case Op::ADD:
+            if (leftValue.type == ValueType::String || rightValue.type == ValueType::String) {
+                return makeString(valueToString(leftValue) + valueToString(rightValue));
+            }
+            if (leftValue.type == ValueType::Int && rightValue.type == ValueType::Int) {
+                return makeInt(leftValue.ival + rightValue.ival);
+            }
+            return makeDouble(asNumber(leftValue) + asNumber(rightValue));
+        case Op::SUB:
+            if (leftValue.type == ValueType::Int && rightValue.type == ValueType::Int) {
+                return makeInt(leftValue.ival - rightValue.ival);
+            }
+            return makeDouble(asNumber(leftValue) - asNumber(rightValue));
+        case Op::MUL:
+            if (leftValue.type == ValueType::Int && rightValue.type == ValueType::Int) {
+                return makeInt(leftValue.ival * rightValue.ival);
+            }
+            return makeDouble(asNumber(leftValue) * asNumber(rightValue));
+        case Op::DIV:
+            if (leftValue.type == ValueType::Int && rightValue.type == ValueType::Int) {
+                if (rightValue.ival == 0) throw LangError("Division by zero");
+                return makeInt(leftValue.ival / rightValue.ival);
+            }
+            if (asNumber(rightValue) == 0.0) throw LangError("Division by zero");
+            return makeDouble(asNumber(leftValue) / asNumber(rightValue));
+        case Op::MOD:
+            if (leftValue.type == ValueType::Int && rightValue.type == ValueType::Int) {
+                if (rightValue.ival == 0) throw LangError("Division by zero");
+                return makeInt(leftValue.ival % rightValue.ival);
+            }
+            if (asNumber(rightValue) == 0.0) throw LangError("Division by zero");
+            return makeDouble(std::fmod(asNumber(leftValue), asNumber(rightValue)));
+        case Op::CONCAT:
+            return makeString(valueToString(leftValue) + valueToString(rightValue));
+        case Op::EQ: return makeBool(valuesEqual(leftValue, rightValue));
+        case Op::NE: return makeBool(!valuesEqual(leftValue, rightValue));
+        case Op::GT: return makeBool(compareValues(leftValue, rightValue) > 0);
+        case Op::GE: return makeBool(compareValues(leftValue, rightValue) >= 0);
+        case Op::LT: return makeBool(compareValues(leftValue, rightValue) < 0);
+        case Op::LE: return makeBool(compareValues(leftValue, rightValue) <= 0);
+        default: throw LangError("Unsupported binary operator");
+    }
+}
+
+int Interpreter::constantIndex(FunctionChunk& chunk, const Value& value) {
+    chunk.constants.push_back(value);
+    return static_cast<int>(chunk.constants.size()) - 1;
+}
+
+int Interpreter::nameIndex(FunctionChunk& chunk, const std::string& name) {
+    chunk.names.push_back(name);
+    return static_cast<int>(chunk.names.size()) - 1;
+}
+
+void Interpreter::compileProgram(const std::vector<StmtPtr>& program) {
+    programChunk = ::compileProgram(program);
+    std::size_t count = static_cast<std::size_t>(programChunk->localCount);
+    vmGlobals.resize(count);
+    vmGlobalConst.assign(count, false);
+    vmGlobalInferred.assign(count, ValueType::Void);
+    programChunk->localCount = 0;
+}
+
+Value Interpreter::runProgram() {
+    if (!programChunk) {
+        return makeVoid();
+    }
+    return executeChunk(*programChunk, nullptr, 0, makeVoid(), "");
+}
+
+Value Interpreter::executeChunk(const FunctionChunk& chunk, const Value* args, int argc,
+                                const Value& self, const std::string& selfClass) {
+    Frame frame;
+    frame.chunk = &chunk;
+    if (argc != static_cast<int>(chunk.paramNames.size())) {
+        throw LangError("Function expects " + std::to_string(chunk.paramNames.size()) +
+                        " arguments but got " + std::to_string(argc));
+    }
+    if (chunk.localCount > 32) {
+        throw LangError("Too many local variables in function");
+    }
+    for (int i = 0; i < argc && i < static_cast<int>(chunk.paramNames.size()); ++i) {
+        frame.slots[i] = args[i];
+    }
+    frame.self = self;
+    frame.selfClass = selfClass;
+    return runFrame(frame);
+}
+
+Value Interpreter::runFrame(Frame& frame) {
+    const FunctionChunk& chunk = *frame.chunk;
+    Value stack[64];
+    int stackPointer = 0;
+
+    auto push = [&stack, &stackPointer](const Value& value) {
+        stack[stackPointer++] = value;
+    };
+    auto pop = [&stack, &stackPointer]() {
+        Value value = stack[--stackPointer];
+        stack[stackPointer] = Value{};
+        return value;
+    };
+
+    while (frame.ip < chunk.code.size()) {
+        const Instruction& instruction = chunk.code[frame.ip++];
+
+        switch (instruction.op) {
+            case Op::CONST:
+                push(chunk.constants[static_cast<std::size_t>(instruction.a)]);
+                break;
+
+            case Op::LOAD_SLOT:
+                if (instruction.b == 1) push(frame.slots[static_cast<std::size_t>(instruction.a)]);
+                else push(vmGlobals[static_cast<std::size_t>(instruction.a)]);
+                break;
+
+            case Op::STORE_SLOT: {
+                Value value = pop();
+                std::size_t slot = static_cast<std::size_t>(instruction.a);
+                std::string varName = instruction.c >= 0
+                    ? chunk.names[static_cast<std::size_t>(instruction.c)] : std::string("");
+                if (instruction.b == 1) {
+                    if (frame.constSlots[slot]) throw LangError("Cannot assign to constant: " + varName);
+                    if (frame.inferred[slot] != ValueType::Void && frame.inferred[slot] != value.type) {
+                        throw LangError("Type mismatch for variable: " + varName);
+                    }
+                    frame.slots[slot] = value;
+                } else {
+                    if (vmGlobalConst[slot]) throw LangError("Cannot assign to constant: " + varName);
+                    if (vmGlobalInferred[slot] != ValueType::Void && vmGlobalInferred[slot] != value.type) {
+                        throw LangError("Type mismatch for variable: " + varName);
+                    }
+                    vmGlobals[slot] = value;
+                }
+                break;
+            }
+
+            case Op::LOAD_NAME:
+                push(resolveName(*this, chunk.names[static_cast<std::size_t>(instruction.a)]));
+                break;
+
+            case Op::ADD:
+            case Op::SUB:
+            case Op::MUL:
+            case Op::DIV:
+            case Op::MOD:
+            case Op::CONCAT:
+            case Op::EQ:
+            case Op::NE:
+            case Op::GT:
+            case Op::GE:
+            case Op::LT:
+            case Op::LE: {
+                Value right = pop();
+                Value left = pop();
+                if (left.type == ValueType::Int && right.type == ValueType::Int) {
+                    switch (instruction.op) {
+                        case Op::ADD: push(makeInt(left.ival + right.ival)); break;
+                        case Op::SUB: push(makeInt(left.ival - right.ival)); break;
+                        case Op::MUL: push(makeInt(left.ival * right.ival)); break;
+                        case Op::DIV:
+                            if (right.ival == 0) throw LangError("Division by zero");
+                            push(makeInt(left.ival / right.ival));
+                            break;
+                        case Op::MOD:
+                            if (right.ival == 0) throw LangError("Division by zero");
+                            push(makeInt(left.ival % right.ival));
+                            break;
+                        case Op::EQ: push(makeBool(left.ival == right.ival)); break;
+                        case Op::NE: push(makeBool(left.ival != right.ival)); break;
+                        case Op::GT: push(makeBool(left.ival > right.ival)); break;
+                        case Op::GE: push(makeBool(left.ival >= right.ival)); break;
+                        case Op::LT: push(makeBool(left.ival < right.ival)); break;
+                        case Op::LE: push(makeBool(left.ival <= right.ival)); break;
+                        default: push(vmBinary(instruction.op, left, right)); break;
+                    }
+                } else {
+                    push(vmBinary(instruction.op, left, right));
+                }
+                break;
+            }
+
+            case Op::AND:
+            case Op::OR: {
+                Value right = pop();
+                Value left = pop();
+                push(makeBool(instruction.op == Op::AND
+                    ? (truthy(left) && truthy(right))
+                    : (truthy(left) || truthy(right))));
+                break;
+            }
+
+            case Op::NOT: push(makeBool(!truthy(pop()))); break;
+
+            case Op::NEG: {
+                Value value = pop();
+                if (value.type == ValueType::Int) push(makeInt(-value.ival));
+                else push(makeDouble(-asNumber(value)));
+                break;
+            }
+
+            case Op::BOOL: push(makeBool(truthy(pop()))); break;
+
+            case Op::JUMP:
+                frame.ip = static_cast<std::size_t>(instruction.a);
+                break;
+
+            case Op::JUMP_IF_FALSE:
+                if (!truthy(pop())) frame.ip = static_cast<std::size_t>(instruction.a);
+                break;
+
+            case Op::JUMP_IF_TRUE:
+                if (truthy(pop())) frame.ip = static_cast<std::size_t>(instruction.a);
+                break;
+
+            case Op::POP: pop(); break;
+
+            case Op::DUP: push(stack[stackPointer - 1]); break;
+
+            case Op::CALL: {
+                int argc = instruction.a;
+                Value argBuffer[16];
+                for (int i = argc - 1; i >= 0; --i) argBuffer[i] = pop();
+                Value callee = pop();
+                if (callee.type != ValueType::Function || !callee.fnPtr()) {
+                    throw LangError("Attempt to call a non-function value");
+                }
+                push(invokeFunctionValue(*callee.fnPtr(), argBuffer, argc, makeVoid(), ""));
+                break;
+            }
+
+            case Op::CALL_NATIVE: {
+                const std::string& name = chunk.names[static_cast<std::size_t>(instruction.a)];
+                int argc = instruction.b;
+                Value argBuffer[16];
+                for (int i = argc - 1; i >= 0; --i) argBuffer[i] = pop();
+                push(callNative(name, argBuffer, argc));
+                break;
+            }
+
+            case Op::CALL_METHOD: {
+                const std::string& name = chunk.names[static_cast<std::size_t>(instruction.a)];
+                int argc = instruction.b;
+                Value argBuffer[16];
+                for (int i = argc - 1; i >= 0; --i) argBuffer[i] = pop();
+                Value object = resolveObject(pop());
+                if (object.type != ValueType::Object || !object.objPtr()) {
+                    throw LangError("Attempt to call a method on a non-object");
+                }
+                bool handled = false;
+                Value special = threadMethod(object, name, argBuffer, argc, handled);
+                if (handled) {
+                    push(special);
+                } else {
+                    push(invokeMethod(object.objPtr()->classInfo, object, name, argBuffer, argc));
+                }
+                break;
+            }
+
+            case Op::CALL_STATIC: {
+                const std::string& name = chunk.names[static_cast<std::size_t>(instruction.a)];
+                int argc = instruction.b;
+                Value argBuffer[16];
+                for (int i = argc - 1; i >= 0; --i) argBuffer[i] = pop();
+                Value owner = pop();
+                if (owner.type == ValueType::Namespace && owner.nsPtr()) {
+                    push(invokeNamespaceFunction(owner.nsPtr(), name, argBuffer, argc));
+                    break;
+                }
+                if (owner.type != ValueType::Class || !owner.clsPtr()) {
+                    throw LangError("Attempt to call a static method on a non-class");
+                }
+                push(invokeStatic(owner.clsPtr(), name, argBuffer, argc, frame.self, frame.selfClass));
+                break;
+            }
+
+            case Op::LOAD_MEMBER: {
+                Value object = resolveObject(pop());
+                if (object.type != ValueType::Object || !object.objPtr()) {
+                    throw LangError("Attempt to access a member on a non-object");
+                }
+                const std::string& name = chunk.names[static_cast<std::size_t>(instruction.a)];
+                const std::shared_ptr<ClassInfo>& info = object.objPtr()->classInfo;
+                checkVisibility(info->name, findPropertyVisibility(info.get(), name));
+                auto it = object.objPtr()->properties.find(name);
+                if (it != object.objPtr()->properties.end()) {
+                    push(it->second);
+                } else {
+                    const Value* fallback = findDefaultProperty(info.get(), name);
+                    if (!fallback) throw LangError("Undefined property: " + info->name + "->" + name);
+                    push(*fallback);
+                }
+                break;
+            }
+
+            case Op::STORE_MEMBER: {
+                Value value = storeObject(pop());
+                Value object = resolveObject(pop());
+                if (object.type != ValueType::Object || !object.objPtr()) {
+                    throw LangError("Attempt to set a member on a non-object");
+                }
+                const std::string& name = chunk.names[static_cast<std::size_t>(instruction.a)];
+                const std::shared_ptr<ClassInfo>& info = object.objPtr()->classInfo;
+                checkVisibility(info->name, findPropertyVisibility(info.get(), name));
+                auto it = object.objPtr()->properties.find(name);
+                if (it == object.objPtr()->properties.end()) {
+                    throw LangError("Undefined property: " + info->name + "->" + name);
+                }
+                it->second = value;
+                push(value);
+                break;
+            }
+
+            case Op::LOAD_STATIC: {
+                Value owner = pop();
+                const std::string& name = chunk.names[static_cast<std::size_t>(instruction.a)];
+                if (owner.type == ValueType::Namespace && owner.nsPtr()) {
+                    const std::shared_ptr<NamespaceInfo>& info = owner.nsPtr();
+                    auto nested = info->namespaces.find(name);
+                    if (nested != info->namespaces.end()) {
+                        push(makeNamespaceValue(nested->second));
+                        break;
+                    }
+                    auto classIt = info->classes.find(name);
+                    if (classIt != info->classes.end()) {
+                        Value value; value.type = ValueType::Class; value.payload = classIt->second;
+                        push(value);
+                        break;
+                    }
+                    auto functionIt = info->functions.find(name);
+                    if (functionIt != info->functions.end()) {
+                        push(makeFunctionValue(functionIt->second));
+                        break;
+                    }
+                    auto constantIt = info->constants.find(name);
+                    if (constantIt != info->constants.end()) {
+                        push(constantIt->second);
+                        break;
+                    }
+                    throw LangError("Undefined namespace member: " + info->name + "::" + name);
+                }
+                if (owner.type != ValueType::Class || !owner.clsPtr()) {
+                    throw LangError("Attempt to access a static member on a non-class");
+                }
+                const Value* constant = findConstant(owner.clsPtr().get(), name);
+                if (!constant) throw LangError("Undefined static member: " + owner.clsPtr()->name + "::" + name);
+                push(*constant);
+                break;
+            }
+
+            case Op::NEW: {
+                const std::string& name = chunk.names[static_cast<std::size_t>(instruction.a)];
+                int argc = instruction.b;
+                Value argBuffer[16];
+                for (int i = argc - 1; i >= 0; --i) argBuffer[i] = pop();
+                std::shared_ptr<ClassInfo> info = findClassInfo(*this, name);
+                if (!info) throw LangError("Undefined class: " + name);
+                push(createObjectFrom(info, argBuffer, argc));
+                break;
+            }
+
+            case Op::THIS:
+                if (frame.self.type != ValueType::Object) {
+                    throw LangError("this is only available inside a method");
+                }
+                push(frame.self);
+                break;
+
+            case Op::PARENT: {
+                std::shared_ptr<ClassInfo> info = findClassInfo(*this, frame.selfClass);
+                if (!info || !info->parent) throw LangError("parent is not available in this class");
+                Value value; value.type = ValueType::Class; value.payload = info->parent;
+                push(value);
+                break;
+            }
+
+            case Op::MAKE_FUNCTION: {
+                std::shared_ptr<FunctionChunk> child = chunk.children[static_cast<std::size_t>(instruction.a)];
+                FunctionValue function;
+                function.chunk = child;
+                function.parameters = child->paramNames;
+                function.isAsync = child->isAsync;
+                push(makeFunctionValue(function));
+                break;
+            }
+
+            case Op::AWAIT:
+                push(awaitValue(pop()));
+                break;
+
+            case Op::DEFINE_FUNCTION: {
+                const std::string& name = chunk.names[static_cast<std::size_t>(instruction.a)];
+                Value value = pop();
+                FunctionValue function;
+                if (value.type == ValueType::Function && value.fnPtr()) function = *value.fnPtr();
+                if (currentNamespace) currentNamespace->functions[name] = function;
+                else functions[name] = function;
+                break;
+            }
+
+            case Op::DEFINE_VAR: {
+                std::size_t slot = static_cast<std::size_t>(instruction.a);
+                int flags = instruction.b;
+                const std::string& varName = chunk.names[static_cast<std::size_t>(instruction.c)];
+                if ((flags & 4) != 0) {
+                    if (frame.constSlots[slot]) throw LangError("Cannot redeclare constant: " + varName);
+                } else if (vmGlobalConst[slot]) {
+                    throw LangError("Cannot redeclare constant: " + varName);
+                }
+                Value value = pop();
+                if ((flags & 4) != 0) {
+                    frame.slots[slot] = value;
+                    frame.constSlots[slot] = (flags & 1) != 0;
+                    frame.inferred[slot] = (flags & 2) != 0 ? value.type : ValueType::Void;
+                } else {
+                    vmGlobals[slot] = value;
+                    vmGlobalConst[slot] = (flags & 1) != 0;
+                    vmGlobalInferred[slot] = (flags & 2) != 0 ? value.type : ValueType::Void;
+                    if ((flags & 1) != 0 && currentNamespace) {
+                        currentNamespace->constants[chunk.names[static_cast<std::size_t>(instruction.c)]] = value;
+                    }
+                }
+                break;
+            }
+
+            case Op::EXEC_NODE:
+                chunk.statements[static_cast<std::size_t>(instruction.a)]->exec(*this);
+                break;
+
+            case Op::EVAL_NODE:
+                push(chunk.expressions[static_cast<std::size_t>(instruction.a)]->eval(*this));
+                break;
+
+            case Op::RETURN:
+                return pop();
+
+            case Op::RETURN_VOID:
+                return makeVoid();
+
+            case Op::HALT:
+                return makeVoid();
+        }
+    }
+    return makeVoid();
+}
+
+std::shared_ptr<Interpreter> Interpreter::cloneForThread() const {
+    auto child = std::make_shared<Interpreter>();
+    child->programChunk = programChunk;
+    child->vmGlobals = vmGlobals;
+    child->vmGlobalConst = vmGlobalConst;
+    child->vmGlobalInferred = vmGlobalInferred;
+    child->functions = functions;
+    child->classes = classes;
+    child->namespaces = namespaces;
+    child->usingNamespaces = usingNamespaces;
+    child->currentNamespace = currentNamespace;
+    child->globals->values = globals->values;
+    child->globals->inferredTypes = globals->inferredTypes;
+    child->globals->constants = globals->constants;
+
+    auto detachThreadFutures = [](Value& value) {
+        if (value.type != ValueType::Object || !value.objPtr()) {
+            return;
+        }
+        if (value.objPtr()->classInfo->name != "Thread") {
+            return;
+        }
+        auto copy = std::make_shared<ObjectInstance>();
+        copy->classInfo = value.objPtr()->classInfo;
+        copy->properties = value.objPtr()->properties;
+        copy->properties["__future"] = makeVoid();
+        copy->constructed = true;
+        value.payload = copy;
+    };
+
+    for (auto& entry : child->globals->values) {
+        detachThreadFutures(entry.second);
+    }
+    for (auto& value : child->vmGlobals) {
+        detachThreadFutures(value);
+    }
+    return child;
+}
+
+Value Interpreter::spawnAsync(const FunctionValue& function, const Value* args, int argc) {
+    auto state = std::make_shared<FutureState>();
+    auto worker = cloneForThread();
+    state->worker = worker;
+
+    FunctionValue copiedFunction = function;
+    std::vector<Value> copiedArgs(args, args + argc);
+
+    FutureState* rawState = state.get();
+    state->thread = std::thread([worker, copiedFunction, copiedArgs, rawState]() {
+        try {
+            Value result;
+            if (copiedFunction.chunk) {
+                result = worker->executeChunk(*copiedFunction.chunk, copiedArgs.data(),
+                                              static_cast<int>(copiedArgs.size()), makeVoid(), "");
+            } else {
+                result = worker->callFunctionValue(copiedFunction, copiedArgs);
+            }
+            rawState->set(result);
+        } catch (const std::exception& error) {
+            Value failure;
+            failure.type = ValueType::String;
+            failure.setString(std::string("Async error: ") + error.what());
+            rawState->set(failure);
+        }
+        worker->shutdown();
+    });
+
+    Value future;
+    future.type = ValueType::Future;
+    future.payload = state;
+    return future;
+}
+
+Value Interpreter::awaitValue(const Value& value) {
+    if (value.type == ValueType::Future) {
+        std::shared_ptr<FutureState> state = value.futurePtr();
+        return state ? state->get() : makeVoid();
+    }
+    return value;
+}
+
+Value Interpreter::getMember(const Value& object, const std::string& name) const {
+    Value resolved = resolveObject(object);
+    if (resolved.type != ValueType::Object || !resolved.objPtr()) {
+        throw LangError("Attempt to access a member on a non-object");
+    }
+    auto it = resolved.objPtr()->properties.find(name);
+    if (it != resolved.objPtr()->properties.end()) {
+        return it->second;
+    }
+    const Value* fallback = findDefaultProperty(resolved.objPtr()->classInfo.get(), name);
+    return fallback ? *fallback : makeVoid();
+}
+
+void Interpreter::setMember(const Value& object, const std::string& name, const Value& value) {
+    Value resolved = resolveObject(object);
+    if (resolved.type != ValueType::Object || !resolved.objPtr()) {
+        throw LangError("Attempt to set a member on a non-object");
+    }
+    auto it = resolved.objPtr()->properties.find(name);
+    if (it == resolved.objPtr()->properties.end()) {
+        throw LangError("Undefined property: " + resolved.objPtr()->classInfo->name + "->" + name);
+    }
+    it->second = storeObject(value);
+}
+
+Value Interpreter::makeThreadValue() {
+    Value value;
+    value.type = ValueType::Thread;
+    value.payload = std::make_shared<ThreadState>();
+    return value;
+}
+
+Value Interpreter::threadStart(const Value& object, const Value* args, int argc) {
+    Value fn = getMember(object, "__fn");
+    if (fn.type != ValueType::Function || !fn.fnPtr()) {
+        throw LangError("Thread requires a function");
+    }
+    Value future = spawnAsync(*fn.fnPtr(), args, argc);
+    setMember(object, "__future", future);
+    return makeVoid();
+}
+
+Value Interpreter::threadJoin(const Value& object) {
+    Value future = getMember(object, "__future");
+    return awaitValue(future);
+}
+
+Value Interpreter::threadMethod(const Value& object, const std::string& name, const Value* args,
+                                int argc, bool& handled) {
+    Value resolved = resolveObject(object);
+    if (resolved.type != ValueType::Object || !resolved.objPtr() ||
+        resolved.objPtr()->classInfo->name != "Thread") {
+        handled = false;
+        return makeVoid();
+    }
+    handled = true;
+    if (name == "start") {
+        return threadStart(resolved, args, argc);
+    }
+    if (name == "join") {
+        return threadJoin(resolved);
+    }
+    handled = false;
     return makeVoid();
 }

@@ -1,0 +1,6 @@
+class Base { protected $v = 7; }
+class Child extends Base {
+    function read() { return $this->v; }
+}
+var c = new Child();
+println(c->read());

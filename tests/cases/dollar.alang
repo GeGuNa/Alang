@@ -1,0 +1,7 @@
+$name = "alang";
+$count = 3;
+string name = "other";
+int count = 9;
+println($name, $count, name, count);
+$count = 7;
+println($count, count);

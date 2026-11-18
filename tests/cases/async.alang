@@ -1,0 +1,8 @@
+async function work(int n) {
+    int total = 0;
+    for (int i = 0; i < n; i = i + 1) { total = total + i; }
+    return total;
+}
+var f = work(1000);
+println("started");
+println(await f, await 42);

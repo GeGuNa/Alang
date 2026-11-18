@@ -76,9 +76,8 @@ int main(int argc, char** argv) {
         Parser parser(lexer.tokenize());
         std::vector<StmtPtr> program = parser.parse();
         auto interpreter = std::make_shared<Interpreter>();
-        for (const StmtPtr& statement : program) {
-            interpreter->executeBlock({statement}, interpreter->globals);
-        }
+        interpreter->compileProgram(program);
+        interpreter->runProgram();
         interpreter->shutdown();
     } catch (const LangError& error) {
         std::cerr << "Error: " << error.what() << '\n';

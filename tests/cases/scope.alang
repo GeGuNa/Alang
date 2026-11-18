@@ -1,0 +1,6 @@
+int v = 1;
+{
+    int v = 2;
+    println(v);
+}
+println(v);

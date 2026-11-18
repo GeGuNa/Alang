@@ -1,0 +1,15 @@
+int a = 15;
+int b = 125;
+float c = 14.3;
+double d = 2.5;
+string s = "text";
+str s2 = "alias";
+bool flag = true;
+char ch = 'x';
+println(a, b, c, d, s, s2, flag, ch);
+int z;
+float fz;
+string ez;
+println(z, fz, "[", ez, "]");
+a = 35;
+println(a);

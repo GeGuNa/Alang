@@ -1,0 +1,6 @@
+$name = "eeeeeeee";
+string name = "aaa";
+const a = "qwewqe";
+println($name);
+println(name);
+println(a);

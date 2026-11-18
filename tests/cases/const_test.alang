@@ -1,0 +1,8 @@
+const a = "qwewqe";
+const int limit = 100;
+println(a, limit);
+{
+    const int local = 42;
+    println(local);
+}
+println(a);

@@ -1,0 +1,2 @@
+int f(int a) { return a; }
+println(f(1, 2));

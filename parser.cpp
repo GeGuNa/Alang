@@ -79,13 +79,19 @@ std::vector<StmtPtr> Parser::parse() {
 }
 
 StmtPtr Parser::declaration() {
+    bool isAsync = match({T_ASYNC});
+
     if (match({T_FN})) {
-        return functionDeclaration(T_VOID);
+        return functionDeclaration(T_VOID, isAsync);
+    }
+    if (isAsync && check(T_FUNCTION)) {
+        ++current_;
+        return functionDeclaration(T_VOID, true);
     }
     if (check(T_FUNCTION) && current_ + 1 < tokens_.size() &&
         tokens_[current_ + 1].type == T_IDENT) {
         ++current_;
-        return functionDeclaration(T_VOID);
+        return functionDeclaration(T_VOID, isAsync);
     }
     if (match({T_CONST})) {
         TokType type = T_VOID;
@@ -262,7 +268,7 @@ std::vector<std::pair<TokType, std::string>> Parser::parameterList() {
     return parameters;
 }
 
-StmtPtr Parser::functionDeclaration(TokType returnType) {
+StmtPtr Parser::functionDeclaration(TokType returnType, bool isAsync) {
     (void)returnType;
     const Token& nameToken = consume(T_IDENT, "Expected function name");
     std::vector<std::pair<TokType, std::string>> parameters = parameterList();
@@ -272,6 +278,7 @@ StmtPtr Parser::functionDeclaration(TokType returnType) {
     function->name = nameToken.text;
     function->parameters = std::move(parameters);
     function->body = std::move(body);
+    function->isAsync = isAsync;
     return function;
 }
 
@@ -326,6 +333,13 @@ StmtPtr Parser::statement() {
     return expressionStatement();
 }
 
+bool declaresNames(const StmtPtr& statement) {
+    return std::dynamic_pointer_cast<VarDeclStmt>(statement) ||
+           std::dynamic_pointer_cast<FunctionDeclStmt>(statement) ||
+           std::dynamic_pointer_cast<ClassDeclStmt>(statement) ||
+           std::dynamic_pointer_cast<NamespaceStmt>(statement);
+}
+
 BlockPtr Parser::blockStatement() {
     auto block = std::make_shared<BlockStmt>();
     consume(T_LBRACE, "Expected '{'");
@@ -333,7 +347,11 @@ BlockPtr Parser::blockStatement() {
         if (check(T_ERROR)) {
             throw LangError(lineMessage(peek(), "Unexpected character: " + peek().text));
         }
-        block->statements.push_back(declaration());
+        StmtPtr statement = declaration();
+        if (declaresNames(statement)) {
+            block->needsScope = true;
+        }
+        block->statements.push_back(std::move(statement));
     }
     consume(T_RBRACE, "Expected '}'");
     return block;
@@ -510,6 +528,9 @@ ExprPtr Parser::unary() {
         TokType op = previous().type;
         return std::make_shared<UnaryExpr>(op, unary());
     }
+    if (match({T_AWAIT})) {
+        return std::make_shared<AwaitExpr>(unary());
+    }
     return call();
 }
 
@@ -602,6 +623,15 @@ ExprPtr Parser::primary() {
     }
     if (match({T_FUNCTION})) {
         return functionExpression();
+    }
+    if (match({T_ASYNC})) {
+        consume(T_FUNCTION, "Expected 'function' after async");
+        ExprPtr expr = functionExpression();
+        auto functionExpr = std::dynamic_pointer_cast<FunctionExpr>(expr);
+        if (functionExpr) {
+            functionExpr->isAsync = true;
+        }
+        return expr;
     }
     if (match({T_THIS})) {
         return std::make_shared<ThisExpr>();

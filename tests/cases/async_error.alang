@@ -1,0 +1,2 @@
+async function boom() { nope = 5; return 1; }
+println(await boom());

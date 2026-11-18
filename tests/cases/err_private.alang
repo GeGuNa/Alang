@@ -1,0 +1,3 @@
+class Box { private $secret = 42; }
+var b = new Box();
+println(b->secret);

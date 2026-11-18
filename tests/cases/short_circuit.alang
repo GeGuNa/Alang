@@ -1,0 +1,5 @@
+var x = 0;
+if (false && (x = 1)) { println("bad"); }
+println(x);
+if (true || (x = 2)) { println("ok"); }
+println(x);

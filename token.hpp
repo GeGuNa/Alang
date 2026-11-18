@@ -33,6 +33,9 @@ enum TokType {
     T_CONST,
     T_VAR,
     T_FUNCTION,
+    T_THREAD,
+    T_ASYNC,
+    T_AWAIT,
     T_EXTENDS,
     T_EXTEND,
     T_NAMESPACE,
@@ -88,24 +91,62 @@ struct Token {
     bool dollar = false;
 };
 
-enum class ValueType { Void, Null, Int, Double, Bool, String, Function, Object, Class, Namespace };
+enum class ValueType { Void, Null, Int, Double, Bool, String, Function, Object, ObjectWeak, Class, Namespace, Future, Thread };
 
 struct FunctionValue;
 struct ObjectInstance;
 struct ClassInfo;
 struct NamespaceInfo;
+struct FutureState;
+struct ThreadState;
+
+struct WeakObjectRef {
+    std::weak_ptr<ObjectInstance> ref;
+};
 
 struct Value {
     ValueType type = ValueType::Void;
     long long ival = 0;
     double dval = 0.0;
     bool bval = false;
-    std::string sval;
-    std::shared_ptr<FunctionValue> fval;
-    std::shared_ptr<ObjectInstance> oval;
-    std::weak_ptr<ObjectInstance> woval;
-    std::shared_ptr<ClassInfo> cval;
-    std::shared_ptr<NamespaceInfo> nval;
+    std::shared_ptr<void> payload;
+
+    std::shared_ptr<WeakObjectRef> weakRef() const {
+        return std::static_pointer_cast<WeakObjectRef>(payload);
+    }
+
+    std::shared_ptr<std::string> strPtr() const {
+        return std::static_pointer_cast<std::string>(payload);
+    }
+    std::shared_ptr<FunctionValue> fnPtr() const {
+        return std::static_pointer_cast<FunctionValue>(payload);
+    }
+    std::shared_ptr<ObjectInstance> objPtr() const {
+        return std::static_pointer_cast<ObjectInstance>(payload);
+    }
+    std::shared_ptr<ClassInfo> clsPtr() const {
+        return std::static_pointer_cast<ClassInfo>(payload);
+    }
+    std::shared_ptr<NamespaceInfo> nsPtr() const {
+        return std::static_pointer_cast<NamespaceInfo>(payload);
+    }
+    std::shared_ptr<FutureState> futurePtr() const {
+        return std::static_pointer_cast<FutureState>(payload);
+    }
+    std::shared_ptr<ThreadState> threadPtr() const {
+        return std::static_pointer_cast<ThreadState>(payload);
+    }
+
+    std::string& str() { return *strPtr(); }
+    const std::string& str() const { return *strPtr(); }
+    FunctionValue& fn() { return *fnPtr(); }
+    ObjectInstance& obj() { return *objPtr(); }
+    ClassInfo& cls() { return *clsPtr(); }
+    NamespaceInfo& ns() { return *nsPtr(); }
+
+    void setString(std::string value) {
+        payload = std::make_shared<std::string>(std::move(value));
+    }
 };
 
 inline Value makeVoid() {
@@ -142,7 +183,7 @@ inline Value makeBool(bool value) {
 inline Value makeString(std::string value) {
     Value result;
     result.type = ValueType::String;
-    result.sval = std::move(value);
+    result.setString(std::move(value));
     return result;
 }
 

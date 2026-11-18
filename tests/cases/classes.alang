@@ -1,0 +1,16 @@
+class Point {
+    public $x = 0;
+    private $y = 0;
+    const ORIGIN = "zero";
+    function __construct($a, $b) { $this->x = $a; $this->y = $b; }
+    public function sum() { return $this->x + $this->y; }
+    private function hidden() { return $this->y; }
+    public function reveal() { return $this->hidden(); }
+    static function describe() { return "a point"; }
+}
+var p = new Point(3, 4);
+println(p->x, p->sum(), p->reveal());
+p->x = 10;
+println(p->sum());
+println(Point::ORIGIN, Point::describe());
+println(p);

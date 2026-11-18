@@ -1,0 +1,5 @@
+// line comment
+# hash comment
+/* block
+comment */
+println("after comments");

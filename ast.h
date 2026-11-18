@@ -106,9 +106,18 @@ struct CallExpr : Expr {
 struct FunctionExpr : Expr {
     std::vector<std::string> parameters;
     BlockPtr body;
+    bool isAsync = false;
 
     FunctionExpr(std::vector<std::string> params, BlockPtr b)
         : parameters(std::move(params)), body(std::move(b)) {}
+
+    Value eval(Interpreter& interpreter) override;
+};
+
+struct AwaitExpr : Expr {
+    ExprPtr value;
+
+    explicit AwaitExpr(ExprPtr v) : value(std::move(v)) {}
 
     Value eval(Interpreter& interpreter) override;
 };
@@ -198,6 +207,7 @@ struct VarDeclStmt : Stmt {
 
 struct BlockStmt : Stmt {
     std::vector<StmtPtr> statements;
+    bool needsScope = false;
 
     ExecResult exec(Interpreter& interpreter) override;
 };
@@ -246,6 +256,7 @@ struct FunctionDeclStmt : Stmt {
     std::string name;
     std::vector<std::pair<TokType, std::string>> parameters;
     BlockPtr body;
+    bool isAsync = false;
 
     ExecResult exec(Interpreter& interpreter) override;
 };

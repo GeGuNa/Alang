@@ -1,0 +1,7 @@
+open db
+working
+open temp
+inside
+close temp
+after
+close db

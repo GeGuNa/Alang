@@ -1,0 +1,11 @@
+int i = 0;
+for {
+    i = i + 1;
+    if (i == 2) { continue; }
+    if (i == 4) { break; }
+    println(i);
+}
+int k = 0;
+while k < 2 { println(k); k = k + 1; }
+int m = 0;
+for m < 2 { println(m); m = m + 1; }

@@ -35,7 +35,7 @@ private:
     StmtPtr classDeclaration();
     StmtPtr namespaceDeclaration();
     StmtPtr usingNamespaceStatement();
-    StmtPtr functionDeclaration(TokType returnType);
+    StmtPtr functionDeclaration(TokType returnType, bool isAsync = false);
     StmtPtr varDeclaration(TokType type, bool isConst = false, bool isVar = false);
     StmtPtr statement();
     BlockPtr blockStatement();

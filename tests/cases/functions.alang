@@ -1,0 +1,10 @@
+int add(int a, int b) { return a + b; }
+function mul($a, $b) { return $a * $b; }
+function mixed(int a, $b) { return a + $b; }
+function greet() { println("hi"); return; }
+println(add(3, 4));
+println(mul(3, 4));
+println(mixed(3, 4));
+greet();
+int fact(int n) { if (n <= 1) { return 1; } return n * fact(n - 1); }
+println(fact(5));

@@ -11,6 +11,9 @@ Run any example from the repository root:
     ./prog demo/function_expressions.alang
     ./prog demo/parameters.alang
     ./prog demo/classes.alang
+    ./prog demo/threads.alang
+    ./prog demo/async_await.alang
+    ./prog demo/concurrency_stress.alang
     ./prog demo/inheritance.alang
     ./prog demo/namespaces.alang
     ./prog demo/destructors.alang

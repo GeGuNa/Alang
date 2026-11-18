@@ -1,0 +1,11 @@
+int x = 7;
+if (x > 10) { println("big"); } else if (x == 7) { println("seven"); } else { println("small"); }
+if (x < 5) { println("never"); }
+int i = 0;
+while (i < 5) {
+    i = i + 1;
+    if (i == 2) { continue; }
+    if (i == 4) { break; }
+    println(i);
+}
+for (int j = 0; j < 3; j = j + 1) { println(j); }

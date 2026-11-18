@@ -1,0 +1,19 @@
+println("threads");
+
+function work(int n) {
+    int total = 0;
+    for (int i = 0; i < n; i = i + 1) {
+        total = total + i;
+    }
+    return total;
+}
+
+var a = new Thread(work);
+var b = new Thread(work);
+a->start(1000000);
+b->start(1000000);
+println("both threads running");
+println("a =", a->join());
+println("b =", b->join());
+
+println("threads share no mutable state; each gets its own globals");

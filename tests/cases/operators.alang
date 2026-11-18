@@ -1,0 +1,6 @@
+println(10 + 3, 10 - 3, 10 * 3, 10 / 3, 10 % 3);
+println(10.5 + 2.25, 7 / 2, 7.0 / 2);
+println("a" + 1, "b" . 2, 1 . 2 . 3);
+println(10 > 3, 10 >= 10, 3 < 10, 3 <= 2, 3 == 3, 3 != 4);
+println(true && false, true || false, !false, -7);
+println((2 + 3) * 4);

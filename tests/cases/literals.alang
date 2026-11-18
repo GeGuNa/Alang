@@ -1,0 +1,6 @@
+println(123);
+println(-456);
+println(13.5);
+println(true, false, null);
+println("hello", 'world');
+println("a\nb\tc\\d\"e");

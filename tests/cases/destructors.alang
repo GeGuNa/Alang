@@ -1,0 +1,12 @@
+class Resource {
+    private $name = "";
+    function __construct($name) { $this->name = $name; println("open", $this->name); }
+    function __destruct() { println("close", $this->name); }
+}
+var db = new Resource("db");
+println("working");
+{
+    var temp = new Resource("temp");
+    println("inside");
+}
+println("after");

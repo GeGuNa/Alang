@@ -4,7 +4,7 @@ PHP-like interpreter written in C++17.
 
 ## Build
 
-    g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -o prog main.cpp lexer.cpp parser.cpp interpreter.cpp
+    g++ -std=c++17 -O3 -march=native -flto -Wall -Wextra -Wpedantic -o prog main.cpp lexer.cpp parser.cpp interpreter.cpp vm.cpp
 
 ## Run
 
@@ -104,6 +104,19 @@ Namespaces with C++-style `using namespace` and `Name::member` lookup:
     var v = new Vec();
     println(stD::PI, hello(), PI);
 
+Concurrency with true OS threads. `async function` calls return a future immediately, `await` unwraps it, and `Thread` runs a function on its own thread:
+
+    async function work(int n) { return n * 2; }
+    var future = work(21);
+    println(await future);
+
+    function job(int n) { return n * 2; }
+    var t = new Thread(job);
+    t->start(21);
+    println(t->join());
+
+Each thread gets an isolated copy of the interpreter state, so there are no data races on shared variables.
+
 Control flow: `if` / `else` / `else if`, `while`, `for`, `break`, `continue`.
 
 Loops also accept Rust-style forms. `for { }` and `while { }` are infinite loops that exit with `break`, and conditions do not need parentheses:
@@ -125,3 +138,11 @@ Source comments use double-slash, hash, or slash-star delimiters.
 Built-in output functions: `print`, `echo`, `println`.
 
 See `demo/` for runnable programs that exercise the supported syntax.
+
+## Tests
+
+The regression suite covers literals, variables, operators, control flow, functions, closures, classes, inheritance, namespaces, destructors, threads/async, and error cases, plus randomized fuzz inputs. It checks exact output, exit codes and sanitizer reports:
+
+    g++ -std=c++17 -O1 -g -fsanitize=address,undefined -fsanitize-recover=all \
+        -o alang_test main.cpp lexer.cpp parser.cpp interpreter.cpp vm.cpp
+    python3 tests/run.py ./alang_test

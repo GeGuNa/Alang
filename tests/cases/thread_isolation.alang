@@ -1,0 +1,5 @@
+int counter = 0;
+function bump() { counter = counter + 1; return counter; }
+var t = new Thread(bump);
+t->start();
+println(t->join(), counter);

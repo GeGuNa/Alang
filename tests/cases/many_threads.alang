@@ -1,0 +1,4 @@
+function work(int n) { return n * 3; }
+var a = new Thread(work); var b = new Thread(work); var c = new Thread(work);
+a->start(1); b->start(2); c->start(3);
+println(a->join(), b->join(), c->join());

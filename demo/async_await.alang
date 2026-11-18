@@ -1,0 +1,22 @@
+println("async and await");
+
+async function sum(int n) {
+    int total = 0;
+    for (int i = 0; i < n; i = i + 1) {
+        total = total + i;
+    }
+    return total;
+}
+
+async function greet(string name) {
+    return "hello " . name;
+}
+
+var first = sum(1000000);
+var second = greet("world");
+println("both tasks started");
+println("sum =", await first);
+println(await second);
+
+println("await on a normal value passes it through");
+println(await 42);

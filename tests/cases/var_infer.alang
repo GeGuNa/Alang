@@ -1,0 +1,10 @@
+var s = "qq";
+var ss = 15;
+var d = 13.5;
+var flag = true;
+println(s, ss, d, flag);
+ss = 20;
+println(ss);
+$name = "alang";
+$count = 7;
+println($name, $count);

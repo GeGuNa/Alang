@@ -1,0 +1,8 @@
+string a = "qweqe";
+string b = "qwewqe";
+string c = a + b;
+println(c);
+var s = "qq";
+println(s . "");
+var num = 13.5;
+println("value=" . num . "!");

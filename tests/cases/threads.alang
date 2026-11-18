@@ -1,0 +1,5 @@
+function work(int n) { return n * 2; }
+var t = new Thread(work);
+t->start(21);
+println("waiting");
+println(t->join());

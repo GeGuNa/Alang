@@ -1,0 +1,8 @@
+namespace outer {
+    namespace inner {
+        const VALUE = 9;
+        function who() { return "inner"; }
+    }
+}
+using namespace outer::inner;
+println(outer::inner::VALUE, who(), VALUE);
