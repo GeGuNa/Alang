@@ -41,6 +41,46 @@ println(greet("world"));
 println("fib(8) =", fib(8));
 println("square(6) =", square(6));
 
+println("classes");
+class Counter {
+    public $value = 0;
+    const STEP = 2;
+    function __construct($start) {
+        $this->value = $start;
+    }
+    public function advance() {
+        $this->value = $this->value + Counter::STEP;
+        return $this->value;
+    }
+    static function label() {
+        return "counter";
+    }
+    function __destruct() {
+        println("counter destroyed");
+    }
+}
+var counter = new Counter(1);
+println(counter->advance());
+println(Counter::label());
+
+println("inheritance and namespaces");
+class BaseObj {
+    protected $id = 1;
+    function describe() { return "base"; }
+}
+class ChildObj extends BaseObj {
+    function describe() { return parent::describe() . "/child"; }
+}
+var child = new ChildObj();
+println(child->describe());
+
+namespace tools {
+    const LEVEL = 2;
+    function name() { return "tools"; }
+}
+using namespace tools;
+println(tools::LEVEL, name(), LEVEL);
+
 println("control flow");
 if (i < 5) {
     println("small");

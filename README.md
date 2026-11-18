@@ -61,6 +61,49 @@ A `$`-prefixed assignment declares the variable implicitly, with the type fixed 
     $label = "alang";
     $double = function (int n) { return n * 2; };
 
+PHP-style classes with properties, constants, methods, visibility, constructors, and static members:
+
+    class Point {
+        public $x = 0;
+        private $y = 0;
+        const ORIGIN = "zero";
+
+        function __construct($a, $b) {
+            $this->x = $a;
+            $this->y = $b;
+        }
+
+        public function sum() { return $this->x + $this->y; }
+        static function describe() { return "a point"; }
+    }
+
+    var p = new Point(3, 4);
+    println(p->sum(), Point::ORIGIN, Point::describe());
+
+`__construct` runs on `new`; `__destruct` runs when the object is released (scope exit, or program end):
+
+    class Resource {
+        function __construct() { println("open"); }
+        function __destruct() { println("close"); }
+    }
+
+Inheritance accepts PHP `extends`, C++ `: public Base`, and `extend`. `parent::` calls base methods:
+
+    class Dog extends Animal {
+        function speak() { return parent::speak() + " woof"; }
+    }
+
+Namespaces with C++-style `using namespace` and `Name::member` lookup:
+
+    namespace stD {
+        class Vec { }
+        function hello() { return "hi"; }
+        const PI = 3;
+    }
+    using namespace stD;
+    var v = new Vec();
+    println(stD::PI, hello(), PI);
+
 Control flow: `if` / `else` / `else if`, `while`, `for`, `break`, `continue`.
 
 Loops also accept Rust-style forms. `for { }` and `while { }` are infinite loops that exit with `break`, and conditions do not need parentheses:

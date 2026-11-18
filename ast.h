@@ -19,6 +19,9 @@ struct ExecResult {
 struct Expr {
     virtual ~Expr() = default;
     virtual Value eval(Interpreter& interpreter) = 0;
+    virtual void assign(Interpreter&, const Value&) {
+        throw LangError("Invalid assignment target");
+    }
 };
 
 struct Stmt {
@@ -47,15 +50,14 @@ struct VarExpr : Expr {
     VarExpr(std::string n, bool dollar = false) : name(std::move(n)), fromDollar(dollar) {}
 
     Value eval(Interpreter& interpreter) override;
+    void assign(Interpreter& interpreter, const Value& value) override;
 };
 
 struct AssignExpr : Expr {
-    std::string name;
+    ExprPtr target;
     ExprPtr value;
-    bool implicit = false;
 
-    AssignExpr(std::string n, ExprPtr v, bool isImplicit = false)
-        : name(std::move(n)), value(std::move(v)), implicit(isImplicit) {}
+    AssignExpr(ExprPtr t, ExprPtr v) : target(std::move(t)), value(std::move(v)) {}
 
     Value eval(Interpreter& interpreter) override;
 };
@@ -107,6 +109,67 @@ struct FunctionExpr : Expr {
 
     FunctionExpr(std::vector<std::string> params, BlockPtr b)
         : parameters(std::move(params)), body(std::move(b)) {}
+
+    Value eval(Interpreter& interpreter) override;
+};
+
+struct ThisExpr : Expr {
+    Value eval(Interpreter& interpreter) override;
+};
+
+struct ParentExpr : Expr {
+    Value eval(Interpreter& interpreter) override;
+};
+
+struct NewExpr : Expr {
+    std::string className;
+    std::vector<ExprPtr> arguments;
+
+    NewExpr(std::string name, std::vector<ExprPtr> args)
+        : className(std::move(name)), arguments(std::move(args)) {}
+
+    Value eval(Interpreter& interpreter) override;
+};
+
+struct MemberExpr : Expr {
+    ExprPtr object;
+    std::string name;
+
+    MemberExpr(ExprPtr obj, std::string member)
+        : object(std::move(obj)), name(std::move(member)) {}
+
+    Value eval(Interpreter& interpreter) override;
+    void assign(Interpreter& interpreter, const Value& value) override;
+};
+
+struct StaticMemberExpr : Expr {
+    ExprPtr classExpr;
+    std::string name;
+
+    StaticMemberExpr(ExprPtr cls, std::string member)
+        : classExpr(std::move(cls)), name(std::move(member)) {}
+
+    Value eval(Interpreter& interpreter) override;
+};
+
+struct MemberCallExpr : Expr {
+    ExprPtr object;
+    std::string name;
+    std::vector<ExprPtr> arguments;
+
+    MemberCallExpr(ExprPtr obj, std::string member, std::vector<ExprPtr> args)
+        : object(std::move(obj)), name(std::move(member)), arguments(std::move(args)) {}
+
+    Value eval(Interpreter& interpreter) override;
+};
+
+struct StaticCallExpr : Expr {
+    ExprPtr classExpr;
+    std::string name;
+    std::vector<ExprPtr> arguments;
+
+    StaticCallExpr(ExprPtr cls, std::string member, std::vector<ExprPtr> args)
+        : classExpr(std::move(cls)), name(std::move(member)), arguments(std::move(args)) {}
 
     Value eval(Interpreter& interpreter) override;
 };
@@ -183,6 +246,50 @@ struct FunctionDeclStmt : Stmt {
     std::string name;
     std::vector<std::pair<TokType, std::string>> parameters;
     BlockPtr body;
+
+    ExecResult exec(Interpreter& interpreter) override;
+};
+
+struct ClassPropertyNode {
+    std::string name;
+    TokType declaredType = T_VOID;
+    ExprPtr initializer;
+    std::string visibility = "public";
+    bool isStatic = false;
+};
+
+struct ClassConstantNode {
+    std::string name;
+    ExprPtr initializer;
+};
+
+struct ClassMethodNode {
+    std::string name;
+    std::vector<std::string> parameters;
+    BlockPtr body;
+    std::string visibility = "public";
+    bool isStatic = false;
+};
+
+struct ClassDeclStmt : Stmt {
+    std::string name;
+    std::string baseName;
+    std::vector<ClassPropertyNode> properties;
+    std::vector<ClassConstantNode> constants;
+    std::vector<ClassMethodNode> methods;
+
+    ExecResult exec(Interpreter& interpreter) override;
+};
+
+struct NamespaceStmt : Stmt {
+    std::string name;
+    std::vector<StmtPtr> statements;
+
+    ExecResult exec(Interpreter& interpreter) override;
+};
+
+struct UsingNamespaceStmt : Stmt {
+    std::string name;
 
     ExecResult exec(Interpreter& interpreter) override;
 };

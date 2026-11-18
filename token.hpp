@@ -19,6 +19,7 @@ enum TokType {
     T_DEINIT,
     T_THIS,
     T_NEW,
+    T_NULL,
     T_IF,
     T_ELSE,
     T_FOR,
@@ -32,6 +33,15 @@ enum TokType {
     T_CONST,
     T_VAR,
     T_FUNCTION,
+    T_EXTENDS,
+    T_EXTEND,
+    T_NAMESPACE,
+    T_USING,
+    T_PARENT,
+    T_PUBLIC,
+    T_PRIVATE,
+    T_PROTECTED,
+    T_STATIC,
     T_VOID,
     T_BOOL,
     T_CHAR_TYPE,
@@ -62,6 +72,9 @@ enum TokType {
     T_LBRACE,
     T_RBRACE,
     T_DOT,
+    T_COLON,
+    T_ARROW,
+    T_DOUBLE_COLON,
     T_ERROR
 };
 
@@ -75,9 +88,12 @@ struct Token {
     bool dollar = false;
 };
 
-enum class ValueType { Void, Int, Double, Bool, String, Function };
+enum class ValueType { Void, Null, Int, Double, Bool, String, Function, Object, Class, Namespace };
 
 struct FunctionValue;
+struct ObjectInstance;
+struct ClassInfo;
+struct NamespaceInfo;
 
 struct Value {
     ValueType type = ValueType::Void;
@@ -86,10 +102,20 @@ struct Value {
     bool bval = false;
     std::string sval;
     std::shared_ptr<FunctionValue> fval;
+    std::shared_ptr<ObjectInstance> oval;
+    std::weak_ptr<ObjectInstance> woval;
+    std::shared_ptr<ClassInfo> cval;
+    std::shared_ptr<NamespaceInfo> nval;
 };
 
 inline Value makeVoid() {
     return Value{};
+}
+
+inline Value makeNull() {
+    Value result;
+    result.type = ValueType::Null;
+    return result;
 }
 
 inline Value makeInt(long long value) {

@@ -1,0 +1,55 @@
+println("inheritance");
+
+class Animal {
+    protected $name = "animal";
+    const KINGDOM = "animalia";
+
+    function __construct($name) {
+        $this->name = $name;
+    }
+
+    function speak() {
+        return "...";
+    }
+
+    function getName() {
+        return $this->name;
+    }
+}
+
+class Dog extends Animal {
+    private $breed = "lab";
+
+    function speak() {
+        return "woof";
+    }
+
+    function getBreed() {
+        return $this->breed;
+    }
+
+    function parentSpeak() {
+        return parent::speak();
+    }
+}
+
+var d = new Dog("rex");
+println(d->getName());
+println(d->speak());
+println(d->parentSpeak());
+println(d->getBreed());
+println(Dog::KINGDOM);
+
+println("C++ style base clause");
+class Cat : public Animal {
+    function speak() {
+        return "meow";
+    }
+}
+var c = new Cat("tom");
+println(c->getName(), c->speak());
+
+println("extend keyword");
+class Bird extend Animal {}
+var b = new Bird("tweety");
+println(b->getName(), b->speak());

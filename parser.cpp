@@ -98,6 +98,15 @@ StmtPtr Parser::declaration() {
     if (match({T_VAR})) {
         return varDeclaration(T_VOID, false, true);
     }
+    if (check(T_CLASS)) {
+        return classDeclaration();
+    }
+    if (match({T_NAMESPACE})) {
+        return namespaceDeclaration();
+    }
+    if (match({T_USING})) {
+        return usingNamespaceStatement();
+    }
     if (isFunctionAhead()) {
         TokType returnType = peek().type;
         ++current_;
@@ -109,6 +118,125 @@ StmtPtr Parser::declaration() {
         return varDeclaration(type);
     }
     return statement();
+}
+
+StmtPtr Parser::namespaceDeclaration() {
+    std::string name = consume(T_IDENT, "Expected namespace name").text;
+    while (match({T_DOUBLE_COLON})) {
+        name += "::" + consume(T_IDENT, "Expected namespace name").text;
+    }
+
+    consume(T_LBRACE, "Expected '{' after namespace name");
+    auto node = std::make_shared<NamespaceStmt>();
+    node->name = name;
+    while (!check(T_RBRACE) && !atEnd()) {
+        if (check(T_ERROR)) {
+            throw LangError(lineMessage(peek(), "Unexpected character: " + peek().text));
+        }
+        node->statements.push_back(declaration());
+    }
+    consume(T_RBRACE, "Expected '}' after namespace body");
+    return node;
+}
+
+StmtPtr Parser::usingNamespaceStatement() {
+    consume(T_NAMESPACE, "Expected 'namespace' after using");
+    std::string name = consume(T_IDENT, "Expected namespace name").text;
+    while (match({T_DOUBLE_COLON})) {
+        name += "::" + consume(T_IDENT, "Expected namespace name").text;
+    }
+    consumeSemicolon();
+
+    auto node = std::make_shared<UsingNamespaceStmt>();
+    node->name = name;
+    return node;
+}
+
+StmtPtr Parser::classDeclaration() {
+    ++current_;
+    const Token& nameToken = consume(T_IDENT, "Expected class name");
+
+    std::string baseName;
+    if (match({T_EXTENDS, T_EXTEND})) {
+        baseName = consume(T_IDENT, "Expected base class name").text;
+    } else if (match({T_COLON})) {
+        if (check(T_PUBLIC) || check(T_PRIVATE) || check(T_PROTECTED)) {
+            ++current_;
+        }
+        baseName = consume(T_IDENT, "Expected base class name").text;
+    }
+
+    consume(T_LBRACE, "Expected '{' after class name");
+
+    auto node = std::make_shared<ClassDeclStmt>();
+    node->name = nameToken.text;
+    node->baseName = baseName;
+
+    while (!check(T_RBRACE) && !atEnd()) {
+        std::string visibility = "public";
+        bool isStatic = false;
+        while (check(T_PUBLIC) || check(T_PRIVATE) || check(T_PROTECTED) || check(T_STATIC)) {
+            if (check(T_PRIVATE)) {
+                visibility = "private";
+            } else if (check(T_PROTECTED)) {
+                visibility = "protected";
+            } else if (check(T_STATIC)) {
+                isStatic = true;
+            }
+            ++current_;
+        }
+
+        if (match({T_CONST})) {
+            const Token& constantName = consume(T_IDENT, "Expected constant name");
+            consume(T_ASSIGN, "Expected '=' after constant name");
+            ExprPtr initializer = expression();
+            consumeSemicolon();
+            ClassConstantNode constant;
+            constant.name = constantName.text;
+            constant.initializer = std::move(initializer);
+            node->constants.push_back(std::move(constant));
+            continue;
+        }
+
+        if (check(T_FUNCTION) || check(T_FN)) {
+            ++current_;
+            const Token& methodName = consume(T_IDENT, "Expected method name");
+            auto parsed = parameterList();
+            ClassMethodNode method;
+            method.name = methodName.text;
+            for (const auto& parameter : parsed) {
+                method.parameters.push_back(parameter.second);
+            }
+            method.body = blockStatement();
+            method.visibility = visibility;
+            method.isStatic = isStatic;
+            node->methods.push_back(std::move(method));
+            continue;
+        }
+
+        TokType declaredType = T_VOID;
+        if (isTypeToken(peek().type)) {
+            declaredType = peek().type;
+            ++current_;
+        }
+        const Token& propertyName = consume(T_IDENT, "Expected property name");
+        if (!propertyName.dollar) {
+            throw LangError(lineMessage(propertyName, "Property must use a dollar sigil"));
+        }
+        ClassPropertyNode property;
+        property.name = propertyName.text.substr(1);
+        property.declaredType = declaredType;
+        property.visibility = visibility;
+        property.isStatic = isStatic;
+        if (match({T_ASSIGN})) {
+            property.initializer = expression();
+        }
+        consumeSemicolon();
+        node->properties.push_back(std::move(property));
+    }
+
+    consume(T_RBRACE, "Expected '}' after class body");
+    return node;
 }
 
 std::vector<std::pair<TokType, std::string>> Parser::parameterList() {
@@ -328,11 +456,7 @@ ExprPtr Parser::assignment() {
     ExprPtr left = logicalOr();
     if (match({T_ASSIGN})) {
         ExprPtr value = assignment();
-        auto variable = std::dynamic_pointer_cast<VarExpr>(left);
-        if (!variable) {
-            throw LangError("Invalid assignment target");
-        }
-        return std::make_shared<AssignExpr>(variable->name, std::move(value), variable->fromDollar);
+        return std::make_shared<AssignExpr>(left, std::move(value));
     }
     return left;
 }
@@ -392,15 +516,56 @@ ExprPtr Parser::unary() {
 ExprPtr Parser::call() {
     ExprPtr expr = primary();
 
-    while (match({T_LPAREN})) {
-        std::vector<ExprPtr> args;
-        if (!check(T_RPAREN)) {
-            do {
-                args.push_back(expression());
-            } while (match({T_COMMA}));
+    while (true) {
+        if (match({T_LPAREN})) {
+            std::vector<ExprPtr> args;
+            if (!check(T_RPAREN)) {
+                do {
+                    args.push_back(expression());
+                } while (match({T_COMMA}));
+            }
+            consume(T_RPAREN, "Expected ')' after arguments");
+            expr = std::make_shared<CallExpr>(expr, std::move(args));
+            continue;
         }
-        consume(T_RPAREN, "Expected ')' after arguments");
-        expr = std::make_shared<CallExpr>(expr, std::move(args));
+
+        if (match({T_ARROW})) {
+            const Token& member = consume(T_IDENT, "Expected property or method name");
+            if (check(T_LPAREN)) {
+                ++current_;
+                std::vector<ExprPtr> args;
+                if (!check(T_RPAREN)) {
+                    do {
+                        args.push_back(expression());
+                    } while (match({T_COMMA}));
+                }
+                consume(T_RPAREN, "Expected ')' after arguments");
+                expr = std::make_shared<MemberCallExpr>(expr, member.text, std::move(args));
+            } else {
+                expr = std::make_shared<MemberExpr>(expr, member.text);
+            }
+            continue;
+        }
+
+        if (match({T_DOUBLE_COLON})) {
+            const Token& member = consume(T_IDENT, "Expected static member name");
+            if (check(T_LPAREN)) {
+                ++current_;
+                std::vector<ExprPtr> args;
+                if (!check(T_RPAREN)) {
+                    do {
+                        args.push_back(expression());
+                    } while (match({T_COMMA}));
+                }
+                consume(T_RPAREN, "Expected ')' after arguments");
+                expr = std::make_shared<StaticCallExpr>(expr, member.text, std::move(args));
+            } else {
+                expr = std::make_shared<StaticMemberExpr>(expr, member.text);
+            }
+            continue;
+        }
+
+        break;
     }
     return expr;
 }
@@ -416,6 +581,9 @@ ExprPtr Parser::functionExpression() {
 }
 
 ExprPtr Parser::primary() {
+    if (match({T_NULL})) {
+        return std::make_shared<LiteralExpr>(makeNull());
+    }
     if (match({T_BOOL_LIT})) {
         return std::make_shared<LiteralExpr>(makeBool(previous().bval));
     }
@@ -434,6 +602,25 @@ ExprPtr Parser::primary() {
     }
     if (match({T_FUNCTION})) {
         return functionExpression();
+    }
+    if (match({T_THIS})) {
+        return std::make_shared<ThisExpr>();
+    }
+    if (match({T_PARENT})) {
+        return std::make_shared<ParentExpr>();
+    }
+    if (match({T_NEW})) {
+        const Token& className = consume(T_IDENT, "Expected class name after new");
+        std::vector<ExprPtr> args;
+        if (match({T_LPAREN})) {
+            if (!check(T_RPAREN)) {
+                do {
+                    args.push_back(expression());
+                } while (match({T_COMMA}));
+            }
+            consume(T_RPAREN, "Expected ')' after constructor arguments");
+        }
+        return std::make_shared<NewExpr>(className.text, std::move(args));
     }
     if (match({T_LPAREN})) {
         ExprPtr expr = expression();

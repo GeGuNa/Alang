@@ -1,0 +1,26 @@
+println("PHP style constructors and destructors");
+
+class Resource {
+    private $name = "";
+
+    function __construct($name) {
+        $this->name = $name;
+        println("open", $this->name);
+    }
+
+    function __destruct() {
+        println("close", $this->name);
+    }
+}
+
+var db = new Resource("db");
+println("working with db");
+
+println("scope exit releases the object");
+{
+    var temp = new Resource("temp");
+    println("inside block");
+}
+println("after block");
+
+println("program end releases remaining objects");

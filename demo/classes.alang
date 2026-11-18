@@ -1,0 +1,64 @@
+println("PHP style classes");
+
+class Point {
+    public $x = 0;
+    private $y = 0;
+    const ORIGIN = "zero";
+
+    function __construct($a, $b) {
+        $this->x = $a;
+        $this->y = $b;
+    }
+
+    public function sum() {
+        return $this->x + $this->y;
+    }
+
+    private function hidden() {
+        return $this->y;
+    }
+
+    public function reveal() {
+        return $this->hidden();
+    }
+
+    static function describe() {
+        return "a point";
+    }
+}
+
+var p = new Point(3, 4);
+println(p->x);
+println(p->sum());
+p->x = 10;
+println(p->sum());
+println(p->reveal());
+println(Point::ORIGIN);
+println(Point::describe());
+println(p);
+
+println("visibility and accessors");
+class Secret {
+    private $value = 42;
+
+    public function get() {
+        return $this->value;
+    }
+}
+var s = new Secret();
+println(s->get());
+
+println("null properties and links");
+class Node {
+    public $name = "root";
+    public $next = null;
+
+    function link($other) {
+        $this->next = $other;
+    }
+}
+var first = new Node();
+var second = new Node();
+second->name = "second";
+first->link(second);
+println(first->next->name);

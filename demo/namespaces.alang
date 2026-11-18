@@ -1,0 +1,42 @@
+println("namespaces");
+
+namespace stD {
+    class Vec {
+        public $x = 7;
+        function get() {
+            return $this->x;
+        }
+    }
+
+    function hello() {
+        return "hello from stD";
+    }
+
+    const PI = 3;
+}
+
+println(stD::PI);
+println(stD::hello());
+println(stD::Vec);
+
+using namespace stD;
+var v = new Vec();
+println(v->get());
+println(hello());
+println(PI);
+
+println("nested namespaces");
+namespace outer {
+    namespace inner {
+        const VALUE = 9;
+        function who() {
+            return "inner";
+        }
+    }
+}
+println(outer::inner::VALUE);
+println(outer::inner::who());
+
+using namespace outer::inner;
+println(VALUE);
+println(who());

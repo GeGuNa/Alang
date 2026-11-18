@@ -20,6 +20,7 @@ const std::unordered_map<std::string, TokType>& keywords() {
         {"deinit", T_DEINIT},
         {"this", T_THIS},
         {"new", T_NEW},
+        {"null", T_NULL},
         {"if", T_IF},
         {"else", T_ELSE},
         {"for", T_FOR},
@@ -33,6 +34,15 @@ const std::unordered_map<std::string, TokType>& keywords() {
         {"const", T_CONST},
         {"var", T_VAR},
         {"function", T_FUNCTION},
+        {"extends", T_EXTENDS},
+        {"extend", T_EXTEND},
+        {"namespace", T_NAMESPACE},
+        {"using", T_USING},
+        {"parent", T_PARENT},
+        {"public", T_PUBLIC},
+        {"private", T_PRIVATE},
+        {"protected", T_PROTECTED},
+        {"static", T_STATIC},
         {"true", T_BOOL_LIT},
         {"false", T_BOOL_LIT}
     };
@@ -335,7 +345,30 @@ std::vector<Token> Lexer::tokenize() {
                 }
                 break;
             case '+': advance(); type = T_PLUS; text = "+"; break;
-            case '-': advance(); type = T_MINUS; text = "-"; break;
+            case '-':
+                if (peekNext() == '>') {
+                    advance();
+                    advance();
+                    type = T_ARROW;
+                    text = "->";
+                } else {
+                    advance();
+                    type = T_MINUS;
+                    text = "-";
+                }
+                break;
+            case ':':
+                if (peekNext() == ':') {
+                    advance();
+                    advance();
+                    type = T_DOUBLE_COLON;
+                    text = "::";
+                } else {
+                    advance();
+                    type = T_COLON;
+                    text = ":";
+                }
+                break;
             case '*': advance(); type = T_STAR; text = "*"; break;
             case '/': advance(); type = T_SLASH; text = "/"; break;
             case '%': advance(); type = T_PERCENT; text = "%"; break;

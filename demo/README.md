@@ -10,6 +10,10 @@ Run any example from the repository root:
     ./prog demo/functions.alang
     ./prog demo/function_expressions.alang
     ./prog demo/parameters.alang
+    ./prog demo/classes.alang
+    ./prog demo/inheritance.alang
+    ./prog demo/namespaces.alang
+    ./prog demo/destructors.alang
     ./prog demo/control_flow.alang
     ./prog demo/rust_loops.alang
     ./prog demo/else_if.alang

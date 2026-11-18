@@ -1,6 +1,7 @@
 #include <exception>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -74,10 +75,11 @@ int main(int argc, char** argv) {
         Lexer lexer(source);
         Parser parser(lexer.tokenize());
         std::vector<StmtPtr> program = parser.parse();
-        Interpreter interpreter;
+        auto interpreter = std::make_shared<Interpreter>();
         for (const StmtPtr& statement : program) {
-            interpreter.executeBlock({statement}, interpreter.globals);
+            interpreter->executeBlock({statement}, interpreter->globals);
         }
+        interpreter->shutdown();
     } catch (const LangError& error) {
         std::cerr << "Error: " << error.what() << '\n';
         return 1;

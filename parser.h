@@ -32,6 +32,9 @@ private:
     std::vector<std::pair<TokType, std::string>> parameterList();
 
     StmtPtr declaration();
+    StmtPtr classDeclaration();
+    StmtPtr namespaceDeclaration();
+    StmtPtr usingNamespaceStatement();
     StmtPtr functionDeclaration(TokType returnType);
     StmtPtr varDeclaration(TokType type, bool isConst = false, bool isVar = false);
     StmtPtr statement();
