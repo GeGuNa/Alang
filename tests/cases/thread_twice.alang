@@ -1,0 +1,5 @@
+function f($x) { return $x; }
+var t = new Thread(f);
+t->start(1);
+t->start(2);
+println(t->join());

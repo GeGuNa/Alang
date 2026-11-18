@@ -1,0 +1,2 @@
+println(-5, --5, !true, !!true);
+println(-2.5, !0, !1, !"", !"x");

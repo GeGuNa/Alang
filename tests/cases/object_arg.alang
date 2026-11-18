@@ -1,0 +1,6 @@
+class Box { public $v = 5; }
+function read($b) { return $b->v; }
+var b = new Box();
+println(read(b));
+println(b == b);
+println("obj=" . b);

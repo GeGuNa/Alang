@@ -1,0 +1,3 @@
+class A { static function hello() { return "hi"; } }
+var a = new A();
+println(a->hello());

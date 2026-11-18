@@ -1,0 +1,6 @@
+async function f(int n) { return n * 2; }
+function g(int n) { return n * 3; }
+var ft = f(5);
+var th = new Thread(g);
+th->start(5);
+println(await ft, th->join());

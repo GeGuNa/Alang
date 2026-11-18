@@ -1,0 +1,3 @@
+class Box { public $v = 9; }
+async function build() { var b = new Box(); return b->v; }
+println(await build());

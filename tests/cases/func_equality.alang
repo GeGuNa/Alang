@@ -1,0 +1,5 @@
+function f() { return 1; }
+var a = f;
+var b = f;
+println(a == b);
+println(a != 5);

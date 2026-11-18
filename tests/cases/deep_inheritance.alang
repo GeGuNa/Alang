@@ -1,0 +1,5 @@
+class A { function who() { return "A"; } }
+class B extends A { function who() { return "B"; } function parentWho() { return parent::who(); } }
+class C extends B { function who() { return "C"; } function parentWho() { return parent::who(); } }
+var c = new C();
+println(c->who(), c->parentWho());

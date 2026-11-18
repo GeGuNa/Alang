@@ -71,6 +71,7 @@ struct ClassInfo {
 struct ObjectInstance {
     std::shared_ptr<ClassInfo> classInfo;
     std::unordered_map<std::string, Value> properties;
+    std::vector<std::shared_ptr<ObjectInstance>> owned;
     bool constructed = false;
     bool destructed = false;
 };

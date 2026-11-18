@@ -442,16 +442,33 @@ Value resolveObject(const Value& value) {
     return value;
 }
 
-Value storeObject(const Value& value) {
-    if (value.type == ValueType::Object && value.objPtr()) {
-        Value stored;
-        stored.type = ValueType::ObjectWeak;
+bool ownsTransitively(const ObjectInstance* from, const ObjectInstance* target) {
+    if (!from || !target) return false;
+    if (from == target) return true;
+    for (const auto& child : from->owned) {
+        if (ownsTransitively(child.get(), target)) return true;
+    }
+    return false;
+}
+
+Value storeObject(const Value& value, ObjectInstance* owner) {
+    if (value.type != ValueType::Object || !value.objPtr() || !owner) {
+        return value;
+    }
+    if (ownsTransitively(value.objPtr().get(), owner)) {
+        Value weak;
+        weak.type = ValueType::ObjectWeak;
         auto ref = std::make_shared<WeakObjectRef>();
         ref->ref = value.objPtr();
-        stored.payload = ref;
-        return stored;
+        weak.payload = ref;
+        return weak;
     }
+    owner->owned.push_back(value.objPtr());
     return value;
+}
+
+Value storeObject(const Value& value) {
+    return storeObject(value, nullptr);
 }
 
 Value LiteralExpr::eval(Interpreter&) {
@@ -694,6 +711,20 @@ Value createObject(Interpreter& interpreter, const std::shared_ptr<ClassInfo>& c
 
     object->classInfo = classInfo;
     object->properties = object->classInfo->defaultProperties;
+    for (auto& property : object->properties) {
+        if (property.second.type == ValueType::Object && property.second.objPtr()) {
+            if (ownsTransitively(property.second.objPtr().get(), object.get())) {
+                Value weak;
+                weak.type = ValueType::ObjectWeak;
+                auto ref = std::make_shared<WeakObjectRef>();
+                ref->ref = property.second.objPtr();
+                weak.payload = ref;
+                property.second = weak;
+            } else {
+                object->owned.push_back(property.second.objPtr());
+            }
+        }
+    }
     if (classInfo->name == "Thread" && !args.empty()) {
         object->properties["__fn"] = args[0];
     }
@@ -748,7 +779,7 @@ void MemberExpr::assign(Interpreter& interpreter, const Value& value) {
     if (it == object.objPtr()->properties.end()) {
         throw LangError("Undefined property: " + info->name + "->" + name);
     }
-    it->second = storeObject(value);
+    it->second = storeObject(value, object.objPtr().get());
 }
 
 Value StaticMemberExpr::eval(Interpreter& interpreter) {
@@ -973,7 +1004,7 @@ ExecResult ClassDeclStmt::exec(Interpreter& interpreter) {
         if (property.isStatic) {
             info->constants[property.name] = value;
         } else {
-            info->defaultProperties[property.name] = storeObject(value);
+            info->defaultProperties[property.name] = value;
             info->propertyVisibility[property.name] = property.visibility;
         }
     }
@@ -1274,9 +1305,39 @@ void Interpreter::shutdown() {
                 callMethod(self, "__destruct", {});
             } catch (...) {
             }
+            for (auto& property : object->properties) {
+                property.second = makeVoid();
+            }
+            object->owned.clear();
         }
     }
     shuttingDown = true;
+
+    auto clearObjectValues = [](Value& value) {
+        if (value.type == ValueType::Object || value.type == ValueType::ObjectWeak) {
+            value = makeVoid();
+        }
+    };
+    for (auto& value : vmGlobals) {
+        clearObjectValues(value);
+    }
+    for (auto& entry : globals->values) {
+        clearObjectValues(entry.second);
+    }
+    for (auto& entry : functions) {
+        (void)entry;
+    }
+    for (auto& entry : classes) {
+        if (entry.second) {
+            for (auto& constant : entry.second->constants) clearObjectValues(constant.second);
+            for (auto& property : entry.second->defaultProperties) clearObjectValues(property.second);
+        }
+    }
+    for (auto& entry : namespaces) {
+        if (entry.second) {
+            for (auto& constant : entry.second->constants) clearObjectValues(constant.second);
+        }
+    }
 }
 
 struct ThisGuard {
@@ -1700,11 +1761,12 @@ Value Interpreter::runFrame(Frame& frame) {
             }
 
             case Op::STORE_MEMBER: {
-                Value value = storeObject(pop());
+                Value rawValue = pop();
                 Value object = resolveObject(pop());
                 if (object.type != ValueType::Object || !object.objPtr()) {
                     throw LangError("Attempt to set a member on a non-object");
                 }
+                Value value = storeObject(rawValue, object.objPtr().get());
                 const std::string& name = chunk.names[static_cast<std::size_t>(instruction.a)];
                 const std::shared_ptr<ClassInfo>& info = object.objPtr()->classInfo;
                 checkVisibility(info->name, findPropertyVisibility(info.get(), name));
@@ -1953,7 +2015,7 @@ void Interpreter::setMember(const Value& object, const std::string& name, const 
     if (it == resolved.objPtr()->properties.end()) {
         throw LangError("Undefined property: " + resolved.objPtr()->classInfo->name + "->" + name);
     }
-    it->second = storeObject(value);
+    it->second = storeObject(value, resolved.objPtr().get());
 }
 
 Value Interpreter::makeThreadValue() {

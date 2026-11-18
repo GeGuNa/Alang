@@ -1,0 +1,5 @@
+class Vault {
+    private $code = 123;
+    public function get() { return $this->code; }
+}
+println((new Vault())->get());

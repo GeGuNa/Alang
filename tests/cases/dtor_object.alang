@@ -1,0 +1,12 @@
+class Inner {
+    private $n = 0;
+    function __construct($n) { $this->n = $n; }
+    function __destruct() { println("inner gone", $this->n); }
+}
+class Outer {
+    private $child = null;
+    function __construct($n) { $this->child = new Inner($n); }
+    function __destruct() { println("outer gone"); }
+}
+var o = new Outer(7);
+println("created");

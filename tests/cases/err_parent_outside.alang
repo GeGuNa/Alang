@@ -1,0 +1,3 @@
+class A { function f() { return parent::g(); } }
+var a = new A();
+println(a->f());

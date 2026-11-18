@@ -1,0 +1,4 @@
+function f() { println("thread body"); }
+var t = new Thread(f);
+t->start();
+t->join();

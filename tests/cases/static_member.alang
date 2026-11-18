@@ -1,0 +1,6 @@
+class Config {
+    public static $version = "1.0";
+    const LEVEL = 3;
+    static function info() { return "config"; }
+}
+println(Config::version, Config::LEVEL, Config::info());

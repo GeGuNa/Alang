@@ -1,0 +1,3 @@
+class Base { static function make() { return "base"; } }
+class Child extends Base {}
+println(Child::make());

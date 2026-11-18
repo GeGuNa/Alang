@@ -1,0 +1,4 @@
+int a = 0;
+int b = 0;
+a = b = 7;
+println(a, b);

@@ -1,0 +1,3 @@
+class Base { const X = 11; }
+class Child extends Base {}
+println(Child::X);

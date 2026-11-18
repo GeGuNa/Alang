@@ -1,0 +1,3 @@
+class A {}
+var a = new A();
+println(a->missing);
