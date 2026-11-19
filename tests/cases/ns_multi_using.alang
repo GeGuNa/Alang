@@ -1,0 +1,5 @@
+namespace first { const A = 1; function fa() { return "fa"; } }
+namespace second { const B = 2; function fb() { return "fb"; } }
+using namespace first;
+using namespace second;
+println(A, B, fa(), fb());

@@ -1,0 +1,13 @@
+namespace app {
+    const VERSION = "1.0";
+    function helper($x) { return "app:" . $x; }
+    class Service {
+        private $n = 0;
+        function __construct($n) { $this->n = $n; }
+        function run() { return helper($this->n); }
+    }
+}
+using namespace app;
+var s = new Service(7);
+println(VERSION, helper("x"), s->run());
+println(app::VERSION, app::helper("y"));

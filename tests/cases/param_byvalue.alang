@@ -1,0 +1,6 @@
+function change(int x) { x = 100; return x; }
+int a = 5;
+println(change(a), a);
+function changeStr(string s) { s = s . "!"; return s; }
+string t = "hi";
+println(changeStr(t), t);

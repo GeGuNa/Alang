@@ -1,0 +1,7 @@
+class Holder {
+    public $v = 5;
+    function get() { return $this->v; }
+}
+function read($h) { return $h->get(); }
+var h = new Holder();
+println(read(h));

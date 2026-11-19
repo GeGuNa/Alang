@@ -1,0 +1,5 @@
+namespace ns {
+    class A { function id() { return "A"; } }
+    class B extends A { function id() { return parent::id() . "B"; } }
+}
+var b = new ns::B();

@@ -54,7 +54,8 @@ enum class Op : std::uint8_t {
     RETURN_VOID,
     HALT,
     CALL_NATIVE,
-    AWAIT
+    AWAIT,
+    STORE_STATIC
 };
 
 struct Instruction {

@@ -1,0 +1,5 @@
+class Registry {
+    public static $count = 0;
+    static function bump() { Registry::count = Registry::count + 1; return Registry::count; }
+}
+println(Registry::bump(), Registry::bump(), Registry::count);

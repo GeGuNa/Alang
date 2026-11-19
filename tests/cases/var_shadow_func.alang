@@ -1,0 +1,5 @@
+var add = function (int a, int b) { return a + b; };
+println(add(2, 3));
+function real(int a, int b) { return a - b; }
+var alias = real;
+println(alias(10, 3));

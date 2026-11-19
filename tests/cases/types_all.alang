@@ -1,0 +1,13 @@
+int i = -42;
+float f = 3.14;
+double d = 2.71828;
+bool b = false;
+string s = "text";
+str s2 = "alias";
+char c = 'Z';
+println(i, f, d, b, s, s2, c);
+var vi = 7;
+var vf = 1.5;
+var vb = true;
+var vs = "v";
+println(vi + 1, vf + 0.5, !vb, vs . "!");

@@ -1,0 +1,8 @@
+class Counter {
+    private int $n = 0;
+    function __construct(int $start) { $this->n = $start; }
+    function add(int $x) { $this->n = $this->n + $x; return $this; }
+    function get() { return $this->n; }
+}
+var c = new Counter(5);
+println(c->add(3)->add(4)->get());

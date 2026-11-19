@@ -1,0 +1,5 @@
+function outer(int a) {
+    function inner(int b) { return a + b; }
+    return inner(5);
+}
+println(outer(10));

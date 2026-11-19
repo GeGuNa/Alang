@@ -1,0 +1,4 @@
+function f($a, $b) { return $a + $b; }
+println(f("x", "y"));
+println(f(1.5, 2.5));
+println(f(true, false));

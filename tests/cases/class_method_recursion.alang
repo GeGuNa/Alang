@@ -1,0 +1,8 @@
+class Math {
+    function fib(int n) {
+        if (n <= 1) { return n; }
+        return $this->fib(n - 1) + $this->fib(n - 2);
+    }
+}
+var m = new Math();
+println(m->fib(15));

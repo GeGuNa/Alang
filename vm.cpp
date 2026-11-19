@@ -136,6 +136,19 @@ private:
         return false;
     }
 
+    int declareSlot(const std::string& name, bool& isLocal) {
+        if (!allowLocals_) {
+            isLocal = false;
+            return symbols_.slot(name);
+        }
+        int slot = allocateLocal();
+        if (!scopes_.empty()) {
+            scopes_.back()[name] = slot;
+        }
+        isLocal = true;
+        return slot;
+    }
+
     int ensureSlot(const std::string& name, bool& isLocal) {
         int slot = 0;
         if (findVariable(name, slot, isLocal)) {
@@ -266,6 +279,13 @@ private:
                 emit(Op::STORE_MEMBER, nameIndex(member->name));
                 return;
             }
+            auto staticMember = std::dynamic_pointer_cast<StaticMemberExpr>(assignment->target);
+            if (staticMember) {
+                compileExpression(staticMember->classExpr);
+                compileExpression(assignment->value);
+                emit(Op::STORE_STATIC, nameIndex(staticMember->name));
+                return;
+            }
             emit(Op::EVAL_NODE, expressionIndex(expr));
             return;
         }
@@ -380,7 +400,7 @@ private:
 
         if (auto declaration = std::dynamic_pointer_cast<VarDeclStmt>(statement)) {
             bool isLocal = false;
-            int slot = ensureSlot(declaration->name, isLocal);
+            int slot = declareSlot(declaration->name, isLocal);
             if (declaration->initializer) {
                 compileExpression(declaration->initializer);
             } else {

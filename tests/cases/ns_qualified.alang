@@ -1,0 +1,6 @@
+namespace a { namespace b {
+    const V = 42;
+    function f() { return "bf"; }
+    class C { function m() { return "cm"; } }
+}}
+println(a::b::V, a::b::f());

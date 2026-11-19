@@ -159,6 +159,7 @@ struct StaticMemberExpr : Expr {
         : classExpr(std::move(cls)), name(std::move(member)) {}
 
     Value eval(Interpreter& interpreter) override;
+    void assign(Interpreter& interpreter, const Value& value) override;
 };
 
 struct MemberCallExpr : Expr {

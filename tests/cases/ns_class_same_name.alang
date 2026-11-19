@@ -1,0 +1,4 @@
+namespace one { class Box { function id() { return "one"; } } }
+namespace two { class Box { function id() { return "two"; } } }
+println(one::Box);
+println(two::Box);

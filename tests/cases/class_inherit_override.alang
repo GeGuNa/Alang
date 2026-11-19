@@ -1,0 +1,13 @@
+class Base {
+    protected string $name = "base";
+    function getName() { return $this->name; }
+    function describe() { return "base:" . $this->name; }
+}
+class Mid extends Base {
+    function describe() { return "mid:" . $this->name; }
+}
+class Leaf extends Mid {
+    function describe() { return "leaf:" . parent::describe(); }
+}
+var l = new Leaf();
+println(l->getName(), l->describe());

@@ -782,6 +782,19 @@ void MemberExpr::assign(Interpreter& interpreter, const Value& value) {
     it->second = storeObject(value, object.objPtr().get());
 }
 
+void StaticMemberExpr::assign(Interpreter& interpreter, const Value& value) {
+    Value owner = classExpr->eval(interpreter);
+    if (owner.type == ValueType::Class && owner.clsPtr()) {
+        owner.clsPtr()->constants[name] = value;
+        return;
+    }
+    if (owner.type == ValueType::Namespace && owner.nsPtr()) {
+        owner.nsPtr()->constants[name] = value;
+        return;
+    }
+    throw LangError("Attempt to set a static member on a non-class");
+}
+
 Value StaticMemberExpr::eval(Interpreter& interpreter) {
     Value owner = classExpr->eval(interpreter);
 
@@ -1889,6 +1902,21 @@ Value Interpreter::runFrame(Frame& frame) {
                     }
                 }
                 break;
+            }
+
+            case Op::STORE_STATIC: {
+                Value value = pop();
+                Value owner = pop();
+                const std::string& name = chunk.names[static_cast<std::size_t>(instruction.a)];
+                if (owner.type == ValueType::Class && owner.clsPtr()) {
+                    owner.clsPtr()->constants[name] = value;
+                    break;
+                }
+                if (owner.type == ValueType::Namespace && owner.nsPtr()) {
+                    owner.nsPtr()->constants[name] = value;
+                    break;
+                }
+                throw LangError("Attempt to set a static member on a non-class");
             }
 
             case Op::EXEC_NODE:
