@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "ast.h"
+#include "http.h"
 #include "token.hpp"
 #include "vm.h"
 
@@ -167,6 +168,7 @@ struct Interpreter : std::enable_shared_from_this<Interpreter> {
     std::vector<unsigned char> vmGlobalConst;
     std::vector<ValueType> vmGlobalInferred;
     std::vector<Frame> frames;
+    std::vector<std::shared_ptr<HttpServerState>> serverStates;
 
     void compileProgram(const std::vector<StmtPtr>& program);
     Value runProgram();
@@ -197,6 +199,8 @@ struct Interpreter : std::enable_shared_from_this<Interpreter> {
     Value threadJoin(const Value& object);
     Value threadMethod(const Value& object, const std::string& name, const Value* args,
                        int argc, bool& handled);
+    Value httpMethod(const Value& object, const std::string& name, const Value* args,
+                     int argc, bool& handled);
     Value callFunctionValue(const FunctionValue& function, const std::vector<Value>& args);
     Value callMethod(const Value& object, const std::string& name, const std::vector<Value>& args);
     Value callMethodFrom(const std::shared_ptr<ClassInfo>& info, const Value& object,

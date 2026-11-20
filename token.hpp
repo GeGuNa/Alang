@@ -91,7 +91,7 @@ struct Token {
     bool dollar = false;
 };
 
-enum class ValueType { Void, Null, Int, Double, Bool, String, Function, Object, ObjectWeak, Class, Namespace, Future, Thread };
+enum class ValueType { Void, Null, Int, Double, Bool, String, Function, Object, ObjectWeak, Class, Namespace, Future, Thread, HttpServer, HttpRequest, HttpResponse, UploadedFile };
 
 struct FunctionValue;
 struct ObjectInstance;
@@ -99,6 +99,10 @@ struct ClassInfo;
 struct NamespaceInfo;
 struct FutureState;
 struct ThreadState;
+struct HttpServerState;
+struct HttpRequestData;
+struct HttpResponseData;
+struct UploadedFile;
 
 struct WeakObjectRef {
     std::weak_ptr<ObjectInstance> ref;
@@ -135,6 +139,18 @@ struct Value {
     }
     std::shared_ptr<ThreadState> threadPtr() const {
         return std::static_pointer_cast<ThreadState>(payload);
+    }
+    std::shared_ptr<HttpServerState> serverPtr() const {
+        return std::static_pointer_cast<HttpServerState>(payload);
+    }
+    std::shared_ptr<HttpRequestData> requestPtr() const {
+        return std::static_pointer_cast<HttpRequestData>(payload);
+    }
+    std::shared_ptr<HttpResponseData> responsePtr() const {
+        return std::static_pointer_cast<HttpResponseData>(payload);
+    }
+    std::shared_ptr<UploadedFile> uploadPtr() const {
+        return std::static_pointer_cast<UploadedFile>(payload);
     }
 
     std::string& str() { return *strPtr(); }

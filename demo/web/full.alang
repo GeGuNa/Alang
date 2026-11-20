@@ -1,0 +1,51 @@
+var app = new Server();
+
+app->get("/json", function (req, res) {
+    res->setHeader("X-App", "Alang");
+    res->json("{\"ok\":true}");
+});
+
+app->get("/header", function (req, res) {
+    res->send(req->header("X-Test"));
+});
+
+app->get("/cookie", function (req, res) {
+    res->setCookie("visited", "yes");
+    res->send(req->cookie("visited"));
+});
+
+app->get("/clearcookie", function (req, res) {
+    res->removeCookie("visited");
+    res->send("cleared");
+});
+
+app->post("/form", function (req, res) {
+    res->send(req->form("name") . "=" . req->form("value"));
+});
+
+app->post("/upload", function (req, res) {
+    var f = req->file("payload");
+    if (f == null) { res->status(400); res->send("no file"); return; }
+    var ok = f->save("demo/web/uploaded.txt");
+    res->send(f->filename() . ":" . f->size() . ":" . ok);
+});
+
+app->put("/put", function (req, res) {
+    res->send("put:" . req->body());
+});
+
+app->del("/del", function (req, res) {
+    res->status(204);
+    res->send("");
+});
+
+app->get("/file", function (req, res) {
+    res->sendFile("demo/web/data.txt");
+});
+
+app->get("/redirect", function (req, res) {
+    res->redirect("/json");
+});
+
+println("web demo on 18081");
+app->listen(18081);

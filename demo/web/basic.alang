@@ -1,0 +1,17 @@
+var app = new Server();
+
+app->get("/", function (req, res) {
+    res->send("Hello from Alang!");
+});
+
+app->get("/hello", function (req, res) {
+    var name = req->param("name");
+    res->send("Hello, " . name . "!");
+});
+
+app->post("/echo", function (req, res) {
+    res->send(req->body());
+});
+
+println("listening on 18080");
+app->listen(18080);

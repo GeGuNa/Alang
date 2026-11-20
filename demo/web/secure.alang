@@ -1,0 +1,11 @@
+var app = new Server();
+app->secure("demo/web/certs/cert.pem", "demo/web/certs/key.pem");
+app->limit(100);
+app->get("/", function (req, res) {
+    res->send("secure hello");
+});
+app->get("/info", function (req, res) {
+    res->send("connections=" . app->connections() . " served=" . app->served());
+});
+println("https on 18443");
+app->listen(18443);

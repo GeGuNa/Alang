@@ -250,7 +250,7 @@ std::vector<std::pair<TokType, std::string>> Parser::parameterList() {
     std::vector<std::pair<TokType, std::string>> parameters;
     if (!check(T_RPAREN)) {
         do {
-            if (check(T_IDENT) && peek().dollar) {
+            if (check(T_IDENT)) {
                 parameters.emplace_back(T_VOID, peek().text);
                 ++current_;
                 continue;

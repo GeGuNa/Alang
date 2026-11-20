@@ -1,14 +1,20 @@
 #include "interpreter.h"
+#include "http.h"
 
 #include <algorithm>
+#include <cctype>
+#include <fstream>
 #include <cmath>
 #include <cstddef>
 #include <exception>
 #include <iostream>
 #include <sstream>
+#include <sys/socket.h>
+#include <unistd.h>
 #include <utility>
 
 Value resolveObject(const Value& value);
+void httpRunHandler(Interpreter&, const FunctionValue&, HttpRequestData&, HttpResponseData&);
 
 const FunctionValue* findMethod(const ClassInfo* info, const std::string& name) {
     for (const ClassInfo* current = info; current != nullptr; current = current->parent.get()) {
@@ -68,6 +74,10 @@ bool truthy(const Value& value) {
         case ValueType::Namespace: return static_cast<bool>(value.nsPtr());
         case ValueType::Future: return static_cast<bool>(value.futurePtr());
         case ValueType::Thread: return static_cast<bool>(value.threadPtr());
+        case ValueType::HttpServer: return static_cast<bool>(value.serverPtr());
+        case ValueType::HttpRequest: return static_cast<bool>(value.requestPtr());
+        case ValueType::HttpResponse: return static_cast<bool>(value.responsePtr());
+        case ValueType::UploadedFile: return static_cast<bool>(value.uploadPtr());
     }
     return false;
 }
@@ -92,6 +102,10 @@ double asNumber(const Value& value) {
         case ValueType::Namespace: return 0.0;
         case ValueType::Future: return 0.0;
         case ValueType::Thread: return 0.0;
+        case ValueType::HttpServer: return 0.0;
+        case ValueType::HttpRequest: return 0.0;
+        case ValueType::HttpResponse: return 0.0;
+        case ValueType::UploadedFile: return 0.0;
     }
     return 0.0;
 }
@@ -135,6 +149,10 @@ std::string valueToString(const Value& value) {
             return "<namespace>";
         case ValueType::Future: return "<future>";
         case ValueType::Thread: return "<thread>";
+        case ValueType::HttpServer: return "<server>";
+        case ValueType::HttpRequest: return "<request>";
+        case ValueType::HttpResponse: return "<response>";
+        case ValueType::UploadedFile: return "<file>";
     }
     return "";
 }
@@ -728,6 +746,15 @@ Value createObject(Interpreter& interpreter, const std::shared_ptr<ClassInfo>& c
     if (classInfo->name == "Thread" && !args.empty()) {
         object->properties["__fn"] = args[0];
     }
+    if (classInfo->name == "Server") {
+        auto state = std::make_shared<HttpServerState>();
+        state->owner = interpreter.weak_from_this();
+        interpreter.serverStates.push_back(state);
+        Value server;
+        server.type = ValueType::HttpServer;
+        server.payload = state;
+        return server;
+    }
     Value instance = makeObjectValue(object);
 
     if (hasConstructor) {
@@ -1128,6 +1155,23 @@ Interpreter::Interpreter() {
     threadClass->methods["start"] = FunctionValue{};
     threadClass->methods["join"] = FunctionValue{};
     classes["Thread"] = threadClass;
+
+    auto serverClass = std::make_shared<ClassInfo>();
+    serverClass->name = "Server";
+    serverClass->methods["get"] = FunctionValue{};
+    serverClass->methods["post"] = FunctionValue{};
+    serverClass->methods["put"] = FunctionValue{};
+    serverClass->methods["del"] = FunctionValue{};
+    serverClass->methods["listen"] = FunctionValue{};
+    serverClass->methods["port"] = FunctionValue{};
+    serverClass->methods["secure"] = FunctionValue{};
+    serverClass->methods["limit"] = FunctionValue{};
+    serverClass->methods["connections"] = FunctionValue{};
+    serverClass->methods["served"] = FunctionValue{};
+    serverClass->methods["close"] = FunctionValue{};
+    classes["Server"] = serverClass;
+
+    httpSetHandlerHook(httpRunHandler);
 }
 
 ExecResult Interpreter::executeBlock(const std::vector<StmtPtr>& statements, std::shared_ptr<Environment> env) {
@@ -1724,16 +1768,19 @@ Value Interpreter::runFrame(Frame& frame) {
                 Value argBuffer[16];
                 for (int i = argc - 1; i >= 0; --i) argBuffer[i] = pop();
                 Value object = resolveObject(pop());
+                bool handled = false;
+                Value special = threadMethod(object, name, argBuffer, argc, handled);
+                if (!handled) {
+                    special = httpMethod(object, name, argBuffer, argc, handled);
+                }
+                if (handled) {
+                    push(special);
+                    break;
+                }
                 if (object.type != ValueType::Object || !object.objPtr()) {
                     throw LangError("Attempt to call a method on a non-object");
                 }
-                bool handled = false;
-                Value special = threadMethod(object, name, argBuffer, argc, handled);
-                if (handled) {
-                    push(special);
-                } else {
-                    push(invokeMethod(object.objPtr()->classInfo, object, name, argBuffer, argc));
-                }
+                push(invokeMethod(object.objPtr()->classInfo, object, name, argBuffer, argc));
                 break;
             }
 
@@ -2083,6 +2130,312 @@ Value Interpreter::threadMethod(const Value& object, const std::string& name, co
     if (name == "join") {
         return threadJoin(resolved);
     }
+    handled = false;
+    return makeVoid();
+}
+
+namespace {
+
+std::string lowercaseHeader(const std::string& value) {
+    std::string result = value;
+    std::transform(result.begin(), result.end(), result.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return result;
+}
+
+Value makeHttpValue(ValueType type, const std::shared_ptr<void>& payload) {
+    Value value;
+    value.type = type;
+    value.payload = payload;
+    return value;
+}
+
+}
+
+void httpRunHandler(Interpreter& interpreter, const FunctionValue& handler,
+                    HttpRequestData& request, HttpResponseData& response) {
+    auto requestData = std::make_shared<HttpRequestData>(request);
+    auto responseData = std::make_shared<HttpResponseData>();
+    Value req = makeHttpValue(ValueType::HttpRequest, requestData);
+    Value res = makeHttpValue(ValueType::HttpResponse, responseData);
+    Value args[2] = {req, res};
+
+    try {
+        Value future = interpreter.spawnAsync(handler, args, 2);
+        interpreter.awaitValue(future);
+    } catch (const std::exception&) {
+        responseData->status = 500;
+        responseData->body = "Internal Server Error";
+    }
+
+    response.status = responseData->status;
+    response.body = responseData->body;
+    response.headers = responseData->headers;
+    response.cookies = responseData->cookies;
+    response.sendFilePath = responseData->sendFilePath;
+}
+
+Value Interpreter::httpMethod(const Value& object, const std::string& name, const Value* args,
+                              int argc, bool& handled) {
+    handled = true;
+
+    if (object.type == ValueType::HttpServer) {
+        auto state = object.serverPtr();
+        if (!state) { handled = false; return makeVoid(); }
+        std::string method;
+        if (name == "get") method = "GET";
+        else if (name == "post") method = "POST";
+        else if (name == "put") method = "PUT";
+        else if (name == "del" || name == "delete") method = "DELETE";
+        else if (name == "all") method = "ALL";
+
+        if (!method.empty()) {
+            if (argc < 2 || args[0].type != ValueType::String ||
+                args[1].type != ValueType::Function || !args[1].fnPtr()) {
+                throw LangError("Route requires a path and a function");
+            }
+            std::lock_guard<std::mutex> lock(state->mutex);
+            state->routes.push_back({method, args[0].str(), args[1].fnPtr()});
+            return makeVoid();
+        }
+
+        if (name == "listen") {
+            if (argc < 1) throw LangError("listen requires a port");
+            state->port = static_cast<int>(args[0].ival);
+            httpServe(*state);
+            return makeVoid();
+        }
+        if (name == "port") {
+            return makeInt(state->port);
+        }
+        if (name == "secure") {
+            if (argc < 2) throw LangError("secure requires cert and key paths");
+            state->secure = true;
+            state->certFile = args[0].str();
+            state->keyFile = args[1].str();
+            return makeVoid();
+        }
+        if (name == "limit") {
+            if (argc > 0) state->maxConnections = static_cast<int>(args[0].ival);
+            return makeInt(state->maxConnections);
+        }
+        if (name == "connections") {
+            return makeInt(state->activeConnections.load());
+        }
+        if (name == "served") {
+            return makeInt(static_cast<long long>(state->servedRequests.load()));
+        }
+        if (name == "close") {
+            state->running = false;
+            if (state->listenFd >= 0) {
+                ::shutdown(state->listenFd, SHUT_RDWR);
+                ::close(state->listenFd);
+            }
+            return makeVoid();
+        }
+        handled = false;
+        return makeVoid();
+    }
+
+    if (object.type == ValueType::HttpRequest) {
+        auto req = object.requestPtr();
+        if (!req) { handled = false; return makeVoid(); }
+        if (name == "method") return makeString(req->method);
+        if (name == "path") return makeString(req->path);
+        if (name == "query") return makeString(req->query);
+        if (name == "body") return makeString(req->body);
+        if (name == "address") return makeString(req->remoteAddress);
+        if (name == "header") {
+            if (argc < 1) return makeString("");
+            return makeString(httpHeaderValue(req->headers, args[0].str()));
+        }
+        if (name == "headers") {
+            std::string result;
+            for (const auto& header : req->headers) {
+                if (!result.empty()) result += "; ";
+                result += header.name + "=" + header.value;
+            }
+            return makeString(result);
+        }
+        if (name == "cookie") {
+            if (argc < 1) return makeString("");
+            return makeString(httpCookieValue(req->cookies, args[0].str()));
+        }
+        if (name == "cookies") {
+            std::string result;
+            for (const auto& cookie : req->cookies) {
+                if (!result.empty()) result += "; ";
+                result += cookie.first + "=" + cookie.second;
+            }
+            return makeString(result);
+        }
+        if (name == "form") {
+            if (argc < 1) return makeString("");
+            for (const auto& field : req->form) {
+                if (field.first == args[0].str()) return makeString(field.second);
+            }
+            return makeString("");
+        }
+        if (name == "param") {
+            if (argc < 1) return makeString("");
+            std::string wanted = args[0].str();
+            std::size_t start = 0;
+            while (start <= req->query.size()) {
+                std::size_t end = req->query.find('&', start);
+                std::string part = req->query.substr(start, end == std::string::npos
+                    ? std::string::npos : end - start);
+                std::size_t equal = part.find('=');
+                if (equal != std::string::npos && httpUrlDecode(part.substr(0, equal)) == wanted) {
+                    return makeString(httpUrlDecode(part.substr(equal + 1)));
+                }
+                if (end == std::string::npos) break;
+                start = end + 1;
+            }
+            for (const auto& field : req->form) {
+                if (field.first == wanted) return makeString(field.second);
+            }
+            return makeString("");
+        }
+        if (name == "file") {
+            if (argc < 1) return makeVoid();
+            for (const auto& file : req->files) {
+                if (file->field == args[0].str()) {
+                    return makeHttpValue(ValueType::UploadedFile, file);
+                }
+            }
+            return makeVoid();
+        }
+        if (name == "files") {
+            std::string result;
+            for (const auto& file : req->files) {
+                if (!result.empty()) result += "; ";
+                result += file->field + "=" + file->filename;
+            }
+            return makeString(result);
+        }
+        handled = false;
+        return makeVoid();
+    }
+
+    if (object.type == ValueType::HttpResponse) {
+        auto res = object.responsePtr();
+        if (!res) { handled = false; return makeVoid(); }
+        if (name == "status") {
+            if (argc > 0) res->status = static_cast<int>(args[0].ival);
+            return makeInt(res->status);
+        }
+        if (name == "send") {
+            if (argc > 0) res->body = args[0].str();
+            return makeVoid();
+        }
+        if (name == "json") {
+            if (argc > 0) res->body = args[0].str();
+            bool found = false;
+            for (auto& header : res->headers) {
+                if (header.name == "Content-Type") {
+                    header.value = "application/json; charset=utf-8";
+                    found = true;
+                }
+            }
+            if (!found) res->headers.push_back({"Content-Type", "application/json; charset=utf-8"});
+            return makeVoid();
+        }
+        if (name == "setHeader") {
+            if (argc < 2) throw LangError("setHeader requires name and value");
+            bool found = false;
+            for (auto& header : res->headers) {
+                if (lowercaseHeader(header.name) == lowercaseHeader(args[0].str())) {
+                    header.value = args[1].str();
+                    found = true;
+                }
+            }
+            if (!found) res->headers.push_back({args[0].str(), args[1].str()});
+            return makeVoid();
+        }
+        if (name == "getHeader") {
+            if (argc < 1) return makeString("");
+            for (const auto& header : res->headers) {
+                if (lowercaseHeader(header.name) == lowercaseHeader(args[0].str())) {
+                    return makeString(header.value);
+                }
+            }
+            return makeString("");
+        }
+        if (name == "removeHeader") {
+            if (argc < 1) return makeVoid();
+            std::string wanted = lowercaseHeader(args[0].str());
+            res->headers.erase(std::remove_if(res->headers.begin(), res->headers.end(),
+                [&wanted](const HttpHeader& h) { return lowercaseHeader(h.name) == wanted; }),
+                res->headers.end());
+            return makeVoid();
+        }
+        if (name == "setCookie") {
+            if (argc < 2) throw LangError("setCookie requires name and value");
+            std::string cookie = args[0].str() + "=" + args[1].str() + "; Path=/";
+            if (argc > 2) cookie += "; " + args[2].str();
+            res->cookies.push_back(cookie);
+            return makeVoid();
+        }
+        if (name == "getCookie") {
+            if (argc < 1) return makeString("");
+            for (const auto& cookie : res->cookies) {
+                if (cookie.compare(0, args[0].str().size(), args[0].str()) == 0 &&
+                    cookie.size() > args[0].str().size() && cookie[args[0].str().size()] == '=') {
+                    std::size_t end = cookie.find(';');
+                    return makeString(cookie.substr(args[0].str().size() + 1,
+                        end == std::string::npos ? std::string::npos
+                        : end - args[0].str().size() - 1));
+                }
+            }
+            return makeString("");
+        }
+        if (name == "removeCookie") {
+            if (argc < 1) return makeVoid();
+            res->cookies.push_back(args[0].str() + "=; Path=/; Max-Age=0");
+            return makeVoid();
+        }
+        if (name == "sendFile") {
+            if (argc < 1) throw LangError("sendFile requires a path");
+            res->sendFilePath = args[0].str();
+            return makeVoid();
+        }
+        if (name == "redirect") {
+            if (argc < 1) throw LangError("redirect requires a url");
+            res->status = 302;
+            bool found = false;
+            for (auto& header : res->headers) {
+                if (header.name == "Location") { header.value = args[0].str(); found = true; }
+            }
+            if (!found) res->headers.push_back({"Location", args[0].str()});
+            return makeVoid();
+        }
+        handled = false;
+        return makeVoid();
+    }
+
+    if (object.type == ValueType::UploadedFile) {
+        auto file = object.uploadPtr();
+        if (!file) { handled = false; return makeVoid(); }
+        if (name == "field") return makeString(file->field);
+        if (name == "filename") return makeString(file->filename);
+        if (name == "contentType") return makeString(file->contentType);
+        if (name == "size") return makeInt(static_cast<long long>(file->size()));
+        if (name == "data") {
+            return makeString(std::string(file->data.begin(), file->data.end()));
+        }
+        if (name == "save") {
+            if (argc < 1) throw LangError("save requires a path");
+            std::ofstream out(args[0].str(), std::ios::binary);
+            if (!out) return makeBool(false);
+            out.write(reinterpret_cast<const char*>(file->data.data()),
+                      static_cast<std::streamsize>(file->data.size()));
+            return makeBool(static_cast<bool>(out));
+        }
+        handled = false;
+        return makeVoid();
+    }
+
     handled = false;
     return makeVoid();
 }

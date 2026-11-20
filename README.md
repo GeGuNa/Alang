@@ -4,7 +4,7 @@ PHP-like interpreter written in C++17.
 
 ## Build
 
-    g++ -std=c++17 -O3 -march=native -flto -Wall -Wextra -Wpedantic -o prog main.cpp lexer.cpp parser.cpp interpreter.cpp vm.cpp
+    g++ -std=c++17 -O3 -march=native -flto -Wall -Wextra -Wpedantic -o prog main.cpp lexer.cpp parser.cpp interpreter.cpp vm.cpp http.cpp -lssl -lcrypto
 
 ## Run
 
@@ -103,6 +103,18 @@ Namespaces with C++-style `using namespace` and `Name::member` lookup:
     using namespace stD;
     var v = new Vec();
     println(stD::PI, hello(), PI);
+
+## Web library
+
+An Express.js-style HTTP server is built in. Each request is handled on its own OS thread with an isolated interpreter copy. `Server` supports `get`/`post`/`put`/`del`/`listen`; `Request` provides `method()`, `path()`, `query()`, `body()`, `header()`, `headers()`, `cookie()`, `cookies()`, `form()`, `param()`, `file()`, `files()`; `Response` provides `status()`, `send()`, `json()`, `setHeader()`, `getHeader()`, `removeHeader()`, `setCookie()`, `getCookie()`, `removeCookie()`, `sendFile()`, `redirect()`; uploaded files expose `filename()`, `contentType()`, `size()`, `data()`, `save()`:
+
+    var app = new Server();
+    app->get("/", function (req, res) {
+        res->send("Hello!");
+    });
+    app->listen(8080);
+
+HTTPS is supported too — call `app->secure(certPath, keyPath)` before `listen(port)`. Server control methods: `limit(n)` caps simultaneous connections (extra requests get 503), `connections()` / `served()` report activity, and `close()` shuts the listener down. See `demo/web/` for HTTP, HTTPS, upload and download examples.
 
 Concurrency with true OS threads. `async function` calls return a future immediately, `await` unwraps it, and `Thread` runs a function on its own thread:
 
