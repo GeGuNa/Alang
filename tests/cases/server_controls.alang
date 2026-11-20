@@ -1,0 +1,7 @@
+var app = new Server();
+println(app->limit(25));
+println(app->limit());
+println(app->connections());
+println(app->served());
+app->close();
+println("closed");

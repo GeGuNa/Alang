@@ -1060,7 +1060,7 @@ ExecResult ClassDeclStmt::exec(Interpreter& interpreter) {
         function.className = name;
         function.visibility = method.visibility;
         function.isStatic = method.isStatic;
-        function.isAsync = false;
+        function.isAsync = method.isAsync;
         info->methods[method.name] = std::move(function);
     }
 

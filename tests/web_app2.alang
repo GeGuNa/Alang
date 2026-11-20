@@ -1,0 +1,34 @@
+var app = new Server();
+app->limit(1);
+
+app->all("/method", function (req, res) { res->send(req->method()); });
+
+app->get("/hdr", function (req, res) {
+    res->setHeader("X-One", "a");
+    res->setHeader("x-two", "b");
+    var v = res->getHeader("X-ONE");
+    res->removeHeader("X-Two");
+    res->send(v . ":" . res->getHeader("x-two"));
+});
+
+app->get("/ck", function (req, res) {
+    res->setCookie("token", "abc");
+    res->send(res->getCookie("token"));
+});
+
+app->get("/missingfile", function (req, res) {
+    res->sendFile("no/such/file.txt");
+    res->send("fallback");
+});
+
+app->get("/slow", function (req, res) {
+    int total = 0;
+    for (int i = 0; i < 15000000; i = i + 1) { total = total + i; }
+    res->send("slow");
+});
+
+app->get("/stats", function (req, res) {
+    res->send(app->connections() . "/" . app->served());
+});
+
+app->listen(18447);

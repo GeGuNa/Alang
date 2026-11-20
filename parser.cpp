@@ -204,11 +204,13 @@ StmtPtr Parser::classDeclaration() {
             continue;
         }
 
+        bool methodAsync = match({T_ASYNC});
         if (check(T_FUNCTION) || check(T_FN)) {
             ++current_;
             const Token& methodName = consume(T_IDENT, "Expected method name");
             auto parsed = parameterList();
             ClassMethodNode method;
+            method.isAsync = methodAsync;
             method.name = methodName.text;
             for (const auto& parameter : parsed) {
                 method.parameters.push_back(parameter.second);

@@ -1,0 +1,3 @@
+var app = new Server();
+app->all("/any", function (req, res) { res->send(req->method()); });
+println(app->port());

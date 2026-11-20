@@ -281,6 +281,7 @@ struct ClassMethodNode {
     BlockPtr body;
     std::string visibility = "public";
     bool isStatic = false;
+    bool isAsync = false;
 };
 
 struct ClassDeclStmt : Stmt {

@@ -1,0 +1,2 @@
+println("a\tb\nc\\d\"e\'f");
+println(''.'');

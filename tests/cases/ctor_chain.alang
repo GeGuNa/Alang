@@ -1,0 +1,15 @@
+class Base {
+    protected $name = "";
+    function __construct($name) { $this->name = $name; }
+    function get() { return $this->name; }
+}
+class Child extends Base {
+    private $extra = "";
+    function __construct($name, $extra) {
+        parent::__construct($name);
+        $this->extra = $extra;
+    }
+    function get() { return parent::get() . "-" . $this->extra; }
+}
+var c = new Child("a", "b");
+println(c->get());

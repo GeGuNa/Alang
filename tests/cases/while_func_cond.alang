@@ -1,0 +1,6 @@
+function limit() { return 3; }
+int i = 0;
+while (i < limit()) {
+    println(i);
+    i = i + 1;
+}

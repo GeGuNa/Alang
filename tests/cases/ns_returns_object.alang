@@ -1,0 +1,6 @@
+namespace factory {
+    class Item { public $v = 0; function __construct($v) { $this->v = $v; } }
+    function make($v) { return new Item($v); }
+}
+var i = factory::make(42);
+println(i->v);

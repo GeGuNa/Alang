@@ -1,0 +1,4 @@
+function f(int n, string s) { return s . n; }
+var a = new Thread(f); var b = new Thread(f);
+a->start(1, "a"); b->start(2, "b");
+println(a->join(), b->join());

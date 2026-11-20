@@ -1,0 +1,6 @@
+class Worker {
+    async function compute($n) { return $n * 2; }
+}
+var w = new Worker();
+var f = w->compute(21);
+println(await f);
