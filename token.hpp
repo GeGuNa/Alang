@@ -91,7 +91,7 @@ struct Token {
     bool dollar = false;
 };
 
-enum class ValueType { Void, Null, Int, Double, Bool, String, Function, Object, ObjectWeak, Class, Namespace, Future, Thread, HttpServer, HttpRequest, HttpResponse, UploadedFile };
+enum class ValueType { Void, Null, Int, Double, Bool, String, Function, Object, ObjectWeak, Class, Namespace, Future, Thread, HttpServer, HttpRequest, HttpResponse, UploadedFile, MysqlConn, MysqlResult, MysqlRow };
 
 struct FunctionValue;
 struct ObjectInstance;
@@ -103,6 +103,9 @@ struct HttpServerState;
 struct HttpRequestData;
 struct HttpResponseData;
 struct UploadedFile;
+struct MysqlConnectionData;
+struct MysqlResultData;
+struct MysqlResultRow;
 
 struct WeakObjectRef {
     std::weak_ptr<ObjectInstance> ref;
@@ -151,6 +154,15 @@ struct Value {
     }
     std::shared_ptr<UploadedFile> uploadPtr() const {
         return std::static_pointer_cast<UploadedFile>(payload);
+    }
+    std::shared_ptr<MysqlConnectionData> mysqlPtr() const {
+        return std::static_pointer_cast<MysqlConnectionData>(payload);
+    }
+    std::shared_ptr<MysqlResultData> mysqlResultPtr() const {
+        return std::static_pointer_cast<MysqlResultData>(payload);
+    }
+    std::shared_ptr<MysqlResultRow> mysqlRowPtr() const {
+        return std::static_pointer_cast<MysqlResultRow>(payload);
     }
 
     std::string& str() { return *strPtr(); }

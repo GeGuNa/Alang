@@ -25,6 +25,8 @@ Run any example from the repository root:
     ./prog demo/php_variables.alang
     ./prog demo/showcase.alang
 
+`mysql.alang` shows the MySQL client (requires a running server).
+
 `web/basic.alang`, `web/full.alang` and `web/secure.alang` demonstrate the built-in Express-style HTTP/HTTPS server (run one, then use curl).
 
 `all_syntax.alang` is the single combined program that exercises every supported feature. The other files focus on one area each.

@@ -1,0 +1,6 @@
+var db = new MySQL();
+println("connected=", db->connect("127.0.0.1", "root", "definitely_wrong", "test", 59999));
+println("ping=", db->ping());
+println(db->escape("a'b\"c"));
+db->close();
+println("done");

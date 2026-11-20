@@ -1,0 +1,8 @@
+var db = new MySQL();
+println("query:", db->query("SELECT 1"));
+println("insertId:", db->insertId());
+println("affected:", db->affectedRows());
+println("escape:", db->escape("o'brien"));
+db->close();
+db->close();
+println("done");

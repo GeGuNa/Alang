@@ -75,6 +75,8 @@ struct FunctionChunk {
     int localCount = 0;
     bool legacy = false;
     std::vector<std::string> paramNames;
+    std::unordered_map<std::string, int> globalSlots;
+    std::shared_ptr<BlockStmt> astBody;
     bool isAsync = false;
     std::shared_ptr<BlockStmt> legacyBody;
 };

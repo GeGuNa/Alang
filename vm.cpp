@@ -369,6 +369,7 @@ private:
         int index = static_cast<int>(chunk_.children.size());
         chunk_.children.push_back(child);
         child->isAsync = expr->isAsync;
+        child->astBody = expr->body;
         Compiler childCompiler(*child, symbols_, this, true);
         childCompiler.compileFunction(expr->parameters, expr->body);
         for (const auto& grandchild : child->children) {
@@ -534,6 +535,7 @@ private:
                 params.push_back(parameter.second);
             }
             child->isAsync = function->isAsync;
+            child->astBody = function->body;
             Compiler childCompiler(*child, symbols_, this, true);
             childCompiler.compileFunction(params, function->body);
             for (const auto& grandchild : child->children) {
@@ -566,5 +568,6 @@ std::shared_ptr<FunctionChunk> compileProgram(const std::vector<StmtPtr>& progra
     Compiler compiler(*chunk, symbols, nullptr, false);
     compiler.compileProgram(program);
     chunk->localCount = symbols.count;
+    chunk->globalSlots = symbols.globals;
     return chunk;
 }

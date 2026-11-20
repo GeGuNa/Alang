@@ -1,5 +1,6 @@
 #include "interpreter.h"
 #include "http.h"
+#include "mysql.h"
 
 #include <algorithm>
 #include <cctype>
@@ -78,6 +79,9 @@ bool truthy(const Value& value) {
         case ValueType::HttpRequest: return static_cast<bool>(value.requestPtr());
         case ValueType::HttpResponse: return static_cast<bool>(value.responsePtr());
         case ValueType::UploadedFile: return static_cast<bool>(value.uploadPtr());
+        case ValueType::MysqlConn: return static_cast<bool>(value.mysqlPtr());
+        case ValueType::MysqlResult: return static_cast<bool>(value.mysqlResultPtr());
+        case ValueType::MysqlRow: return static_cast<bool>(value.mysqlRowPtr());
     }
     return false;
 }
@@ -106,6 +110,9 @@ double asNumber(const Value& value) {
         case ValueType::HttpRequest: return 0.0;
         case ValueType::HttpResponse: return 0.0;
         case ValueType::UploadedFile: return 0.0;
+        case ValueType::MysqlConn: return 0.0;
+        case ValueType::MysqlResult: return 0.0;
+        case ValueType::MysqlRow: return 0.0;
     }
     return 0.0;
 }
@@ -153,6 +160,9 @@ std::string valueToString(const Value& value) {
         case ValueType::HttpRequest: return "<request>";
         case ValueType::HttpResponse: return "<response>";
         case ValueType::UploadedFile: return "<file>";
+        case ValueType::MysqlConn: return "<mysql>";
+        case ValueType::MysqlResult: return "<mysql result>";
+        case ValueType::MysqlRow: return "<mysql row>";
     }
     return "";
 }
@@ -543,6 +553,12 @@ Value VarExpr::eval(Interpreter& interpreter) {
     if (interpreter.environment->get(name, value)) {
         return value;
     }
+    auto slot = interpreter.globalSlots.find(name);
+    if (slot != interpreter.globalSlots.end() &&
+        slot->second >= 0 &&
+        static_cast<std::size_t>(slot->second) < interpreter.vmGlobals.size()) {
+        return interpreter.vmGlobals[static_cast<std::size_t>(slot->second)];
+    }
     return resolveName(interpreter, name);
 }
 
@@ -746,6 +762,12 @@ Value createObject(Interpreter& interpreter, const std::shared_ptr<ClassInfo>& c
     if (classInfo->name == "Thread" && !args.empty()) {
         object->properties["__fn"] = args[0];
     }
+    if (classInfo->name == "MySQL") {
+        Value connection;
+        connection.type = ValueType::MysqlConn;
+        connection.payload = std::make_shared<MysqlConnectionData>();
+        return connection;
+    }
     if (classInfo->name == "Server") {
         auto state = std::make_shared<HttpServerState>();
         state->owner = interpreter.weak_from_this();
@@ -863,8 +885,15 @@ Value StaticMemberExpr::eval(Interpreter& interpreter) {
 Value MemberCallExpr::eval(Interpreter& interpreter) {
     Value object = resolveObject(this->object->eval(interpreter));
     std::vector<Value> args = evaluateArguments(arguments, interpreter);
+    int argc = static_cast<int>(args.size());
     bool handled = false;
-    Value special = interpreter.threadMethod(object, name, args.data(), static_cast<int>(args.size()), handled);
+    Value special = interpreter.threadMethod(object, name, args.data(), argc, handled);
+    if (!handled) {
+        special = interpreter.httpMethod(object, name, args.data(), argc, handled);
+    }
+    if (!handled) {
+        special = interpreter.mysqlMethod(object, name, args.data(), argc, handled);
+    }
     if (handled) {
         return special;
     }
@@ -1171,6 +1200,13 @@ Interpreter::Interpreter() {
     serverClass->methods["close"] = FunctionValue{};
     classes["Server"] = serverClass;
 
+    auto mysqlClass = std::make_shared<ClassInfo>();
+    mysqlClass->name = "MySQL";
+    for (const char* method : {"connect", "close", "query", "escape", "lastError", "insertId", "affectedRows", "ping"}) {
+        mysqlClass->methods[method] = FunctionValue{};
+    }
+    classes["MySQL"] = mysqlClass;
+
     httpSetHandlerHook(httpRunHandler);
 }
 
@@ -1294,6 +1330,9 @@ void collectLiveObjects(const Value& value, std::vector<std::shared_ptr<ObjectIn
 }
 
 void Interpreter::shutdown() {
+    for (auto& connection : mysqlConnections) {
+        if (connection) mysqlClose(*connection);
+    }
     thisStack.clear();
     thisClassStack.clear();
 
@@ -1578,6 +1617,7 @@ int Interpreter::nameIndex(FunctionChunk& chunk, const std::string& name) {
 
 void Interpreter::compileProgram(const std::vector<StmtPtr>& program) {
     programChunk = ::compileProgram(program);
+    globalSlots = programChunk->globalSlots;
     std::size_t count = static_cast<std::size_t>(programChunk->localCount);
     vmGlobals.resize(count);
     vmGlobalConst.assign(count, false);
@@ -1773,6 +1813,9 @@ Value Interpreter::runFrame(Frame& frame) {
                 if (!handled) {
                     special = httpMethod(object, name, argBuffer, argc, handled);
                 }
+                if (!handled) {
+                    special = mysqlMethod(object, name, argBuffer, argc, handled);
+                }
                 if (handled) {
                     push(special);
                     break;
@@ -1906,6 +1949,7 @@ Value Interpreter::runFrame(Frame& frame) {
                 std::shared_ptr<FunctionChunk> child = chunk.children[static_cast<std::size_t>(instruction.a)];
                 FunctionValue function;
                 function.chunk = child;
+                function.body = child->astBody;
                 function.parameters = child->paramNames;
                 function.isAsync = child->isAsync;
                 push(makeFunctionValue(function));
@@ -2432,6 +2476,133 @@ Value Interpreter::httpMethod(const Value& object, const std::string& name, cons
                       static_cast<std::streamsize>(file->data.size()));
             return makeBool(static_cast<bool>(out));
         }
+        handled = false;
+        return makeVoid();
+    }
+
+    handled = false;
+    return makeVoid();
+}
+
+Value Interpreter::mysqlMethod(const Value& object, const std::string& name, const Value* args,
+                               int argc, bool& handled) {
+    handled = true;
+
+    if (object.type == ValueType::MysqlConn) {
+        auto connection = object.mysqlPtr();
+        if (!connection) { handled = false; return makeVoid(); }
+
+        if (name == "connect") {
+            if (argc < 4) throw LangError("connect requires host, user, password and database");
+            std::string host = args[0].str();
+            std::string user = args[1].str();
+            std::string password = args[2].str();
+            std::string database = args[3].str();
+            int port = argc > 4 ? static_cast<int>(args[4].ival) : 3306;
+            auto connected = mysqlConnect(host, user, password, database, port);
+            connection->handle = connected->handle;
+            connection->ownerThread = connected->ownerThread;
+            connection->lastError = connected->lastError;
+            connected->handle = nullptr;
+            return makeBool(connection->handle != nullptr);
+        }
+        if (name == "close") {
+            mysqlClose(*connection);
+            return makeVoid();
+        }
+        if (name == "query") {
+            if (argc < 1) throw LangError("query requires a sql string");
+            auto result = std::make_shared<MysqlResultData>();
+            if (!mysqlExecute(*connection, args[0].str(), *result)) {
+                return makeVoid();
+            }
+            Value value;
+            value.type = ValueType::MysqlResult;
+            value.payload = result;
+            return value;
+        }
+        if (name == "escape") {
+            if (argc < 1) return makeString("");
+            return makeString(mysqlEscape(*connection, args[0].str()));
+        }
+        if (name == "lastError") {
+            return makeString(mysqlLastError(*connection));
+        }
+        if (name == "insertId") {
+            if (!connection->handle) return makeInt(0);
+            return makeInt(static_cast<long long>(mysqlInsertId(*connection)));
+        }
+        if (name == "affectedRows") {
+            if (!connection->handle) return makeInt(0);
+            return makeInt(static_cast<long long>(mysqlAffectedRows(*connection)));
+        }
+        if (name == "ping") {
+            if (!connection->handle) return makeBool(false);
+            return makeBool(mysqlPing(*connection));
+        }
+        handled = false;
+        return makeVoid();
+    }
+
+    if (object.type == ValueType::MysqlResult) {
+        auto result = object.mysqlResultPtr();
+        if (!result) { handled = false; return makeVoid(); }
+        if (name == "rows") return makeInt(static_cast<long long>(result->rows.size()));
+        if (name == "columns") {
+            std::string joined;
+            for (const auto& column : result->columns) {
+                if (!joined.empty()) joined += ",";
+                joined += column;
+            }
+            return makeString(joined);
+        }
+        if (name == "affectedRows") return makeInt(static_cast<long long>(result->affectedRows));
+        if (name == "insertId") return makeInt(static_cast<long long>(result->insertId));
+        if (name == "fetch") {
+            if (result->rows.empty()) return makeVoid();
+            Value row;
+            row.type = ValueType::MysqlRow;
+            row.payload = std::make_shared<MysqlResultRow>(result->rows.front());
+            result->rows.erase(result->rows.begin());
+            return row;
+        }
+        if (name == "each") {
+            if (argc < 1 || args[0].type != ValueType::Function || !args[0].fnPtr()) {
+                throw LangError("each requires a function");
+            }
+            for (const auto& source : result->rows) {
+                Value row;
+                row.type = ValueType::MysqlRow;
+                row.payload = std::make_shared<MysqlResultRow>(source);
+                Value callbackArgs[1] = {row};
+                Value future = spawnAsync(*args[0].fnPtr(), callbackArgs, 1);
+                awaitValue(future);
+            }
+            return makeVoid();
+        }
+        handled = false;
+        return makeVoid();
+    }
+
+    if (object.type == ValueType::MysqlRow) {
+        auto row = object.mysqlRowPtr();
+        if (!row) { handled = false; return makeVoid(); }
+        if (name == "get") {
+            if (argc < 1) return makeString("");
+            if (args[0].type == ValueType::String) {
+                const std::string& wanted = args[0].str();
+                for (std::size_t i = 0; i < row->columns.size(); ++i) {
+                    if (row->columns[i] == wanted) {
+                        return makeString(i < row->values.size() ? row->values[i] : "");
+                    }
+                }
+                return makeString("");
+            }
+            long long index = args[0].ival;
+            if (index < 0 || static_cast<std::size_t>(index) >= row->values.size()) return makeString("");
+            return makeString(row->values[static_cast<std::size_t>(index)]);
+        }
+        if (name == "size") return makeInt(static_cast<long long>(row->values.size()));
         handled = false;
         return makeVoid();
     }

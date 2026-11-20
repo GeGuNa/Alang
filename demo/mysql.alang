@@ -1,0 +1,17 @@
+println("MySQL demo");
+
+var db = new MySQL();
+var connected = db->connect("127.0.0.1", "root", "", "alangtest", 3306);
+println("connected:", connected);
+
+if (connected) {
+    db->query("CREATE TABLE IF NOT EXISTS people (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(50))");
+    db->query("INSERT INTO people (name) VALUES ('alang')");
+    var res = db->query("SELECT id, name FROM people");
+    println("columns:", res->columns());
+    println("rows:", res->rows());
+    var row = res->fetch();
+    println("row:", row->get("id"), row->get("name"));
+    println("insertId:", db->insertId());
+    db->close();
+}

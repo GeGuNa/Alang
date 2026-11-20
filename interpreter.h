@@ -14,6 +14,7 @@
 
 #include "ast.h"
 #include "http.h"
+#include "mysql.h"
 #include "token.hpp"
 #include "vm.h"
 
@@ -169,6 +170,8 @@ struct Interpreter : std::enable_shared_from_this<Interpreter> {
     std::vector<ValueType> vmGlobalInferred;
     std::vector<Frame> frames;
     std::vector<std::shared_ptr<HttpServerState>> serverStates;
+    std::vector<std::shared_ptr<MysqlConnectionData>> mysqlConnections;
+    std::unordered_map<std::string, int> globalSlots;
 
     void compileProgram(const std::vector<StmtPtr>& program);
     Value runProgram();
@@ -201,6 +204,8 @@ struct Interpreter : std::enable_shared_from_this<Interpreter> {
                        int argc, bool& handled);
     Value httpMethod(const Value& object, const std::string& name, const Value* args,
                      int argc, bool& handled);
+    Value mysqlMethod(const Value& object, const std::string& name, const Value* args,
+                      int argc, bool& handled);
     Value callFunctionValue(const FunctionValue& function, const std::vector<Value>& args);
     Value callMethod(const Value& object, const std::string& name, const std::vector<Value>& args);
     Value callMethodFrom(const std::shared_ptr<ClassInfo>& info, const Value& object,

@@ -4,7 +4,7 @@ PHP-like interpreter written in C++17.
 
 ## Build
 
-    g++ -std=c++17 -O3 -march=native -flto -Wall -Wextra -Wpedantic -o prog main.cpp lexer.cpp parser.cpp interpreter.cpp vm.cpp http.cpp -lssl -lcrypto
+    g++ -std=c++17 -O3 -march=native -flto -Wall -Wextra -Wpedantic -o prog main.cpp lexer.cpp parser.cpp interpreter.cpp vm.cpp http.cpp mysql.cpp -lssl -lcrypto -l:libmysqlclient.so.21
 
 ## Run
 
@@ -103,6 +103,32 @@ Namespaces with C++-style `using namespace` and `Name::member` lookup:
     using namespace stD;
     var v = new Vec();
     println(stD::PI, hello(), PI);
+
+
+## MySQL
+
+A native MySQL/MariaDB client is built in (requires the client runtime library). Use `new MySQL()`, then `connect(host, user, password, database, port)`, `query(sql)`, `escape(str)`, `lastError()`, `insertId()`, `affectedRows()`, `ping()` and `close()`. `query()` returns a result with `columns()`, `rows()`, `affectedRows()`, `insertId()`, `fetch()` (returns a row) and `each(function(row))`. Rows expose `get(name)`, `get(index)` and `size()`.
+
+With `async`/`await`, each worker gets its own interpreter. A MySQL connection is bound to the thread that created it — create, use and close it **inside the worker**, and return only data (strings/numbers), not the connection object itself. Passing a connection to another thread returns `false`/`void` with a clear `lastError()` instead of undefined behavior:
+
+    async function fetchName() {
+        var db = new MySQL();
+        db->connect("127.0.0.1", "fantom", "123456", "test", 3306);
+        var row = db->query("SELECT name FROM users LIMIT 1")->fetch();
+        var name = row->get("name");
+        db->close();
+        return name;
+    }
+    var future = fetchName();
+    println(await future);
+
+    var db = new MySQL();
+    if (db->connect("127.0.0.1", "root", "", "test", 3306)) {
+        var res = db->query("SELECT id, name FROM users");
+        var row = res->fetch();
+        println(row->get("name"));
+        db->close();
+    }
 
 ## Web library
 
