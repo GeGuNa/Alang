@@ -114,6 +114,32 @@ struct FunctionExpr : Expr {
     Value eval(Interpreter& interpreter) override;
 };
 
+struct ArrayLiteralExpr : Expr {
+    std::vector<ExprPtr> elements;
+
+    explicit ArrayLiteralExpr(std::vector<ExprPtr> e) : elements(std::move(e)) {}
+
+    Value eval(Interpreter& interpreter) override;
+};
+
+struct MapLiteralExpr : Expr {
+    std::vector<std::pair<ExprPtr, ExprPtr>> entries;
+
+    explicit MapLiteralExpr(std::vector<std::pair<ExprPtr, ExprPtr>> e) : entries(std::move(e)) {}
+
+    Value eval(Interpreter& interpreter) override;
+};
+
+struct IndexExpr : Expr {
+    ExprPtr object;
+    ExprPtr index;
+
+    IndexExpr(ExprPtr obj, ExprPtr idx) : object(std::move(obj)), index(std::move(idx)) {}
+
+    Value eval(Interpreter& interpreter) override;
+    void assign(Interpreter& interpreter, const Value& value) override;
+};
+
 struct AwaitExpr : Expr {
     ExprPtr value;
 
@@ -262,6 +288,45 @@ struct FunctionDeclStmt : Stmt {
     ExecResult exec(Interpreter& interpreter) override;
 };
 
+struct ForEachStmt : Stmt {
+    std::string keyName;
+    std::string valueName;
+    ExprPtr iterable;
+    BlockPtr body;
+
+    ExecResult exec(Interpreter& interpreter) override;
+};
+
+struct SwitchCase {
+    ExprPtr value;
+    std::vector<StmtPtr> statements;
+};
+
+struct SwitchStmt : Stmt {
+    ExprPtr value;
+    std::vector<SwitchCase> cases;
+    std::vector<StmtPtr> defaultBranch;
+
+    ExecResult exec(Interpreter& interpreter) override;
+};
+
+struct TryStmt : Stmt {
+    BlockPtr tryBlock;
+    std::string catchName;
+    BlockPtr catchBlock;
+    BlockPtr finallyBlock;
+
+    ExecResult exec(Interpreter& interpreter) override;
+};
+
+struct ThrowStmt : Stmt {
+    ExprPtr value;
+
+    explicit ThrowStmt(ExprPtr v) : value(std::move(v)) {}
+
+    ExecResult exec(Interpreter& interpreter) override;
+};
+
 struct ClassPropertyNode {
     std::string name;
     TokType declaredType = T_VOID;
@@ -287,6 +352,7 @@ struct ClassMethodNode {
 struct ClassDeclStmt : Stmt {
     std::string name;
     std::string baseName;
+    bool isStruct = false;
     std::vector<ClassPropertyNode> properties;
     std::vector<ClassConstantNode> constants;
     std::vector<ClassMethodNode> methods;

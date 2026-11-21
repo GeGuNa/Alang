@@ -1,0 +1,7 @@
+var a = [1, 2, 3];
+println(len(a), a[0], a[2]);
+a[1] = 9;
+println(a[1], a->size());
+a->push(4);
+println(len(a), a->join(","));
+println(a->get(0), a->set(0, 7), a[0]);

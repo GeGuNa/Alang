@@ -27,7 +27,7 @@ for name in sorted(os.listdir(CASES)):
 
     stderr = result.stderr.strip()
     stdout = result.stdout
-    is_error = expected.startswith("Error:")
+    is_error = expected.startswith("Error:") or expected.startswith("Uncaught:")
 
     if is_error:
         wanted = expected.strip()

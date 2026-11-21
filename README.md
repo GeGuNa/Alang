@@ -105,6 +105,35 @@ Namespaces with C++-style `using namespace` and `Name::member` lookup:
     println(stD::PI, hello(), PI);
 
 
+## Collections, switch and exceptions
+
+Arrays and maps use `[...]` and `{"key": value}` literals with `[]` indexing. `len(x)` and methods `size()`, `push()`, `get()`, `set()`, `join()`, `keys()`, `values()`, `has()`, `remove()` are available. `foreach` comes in value and key/value forms; strings are iterable too:
+
+    var a = [1, 2, 3];
+    for (x in a) { println(x); }
+    var m = {"a": 1};
+    for (k, v in m) { println(k, v); }
+
+`switch` supports `case`, `default`, `break` and fall-through. Exceptions use `throw`, `try`, `catch (name)` and optional `finally`:
+
+    try { throw "oops"; }
+    catch (e) { println(e); }
+    finally { println("cleanup"); }
+
+## Structs
+
+C++-style `struct` declarations are supported. Members are public by default (fields do not need a `$` sigil, though `$` names are accepted). Structs may have methods, constructors, destructors and inheritance, and are instantiated with `new`:
+
+    struct Point {
+        int x = 0;
+        int y = 0;
+        function sum() { return $this->x + $this->y; }
+    }
+    var p = new Point();
+    p->x = 3;
+    p->y = 4;
+    println(p->sum());
+
 ## MySQL
 
 A native MySQL/MariaDB client is built in (requires the client runtime library). Use `new MySQL()`, then `connect(host, user, password, database, port)`, `query(sql)`, `escape(str)`, `lastError()`, `insertId()`, `affectedRows()`, `ping()` and `close()`. `query()` returns a result with `columns()`, `rows()`, `affectedRows()`, `insertId()`, `fetch()` (returns a row) and `each(function(row))`. Rows expose `get(name)`, `get(index)` and `size()`.

@@ -4,6 +4,7 @@
 #include <condition_variable>
 #include <functional>
 #include <future>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -19,6 +20,8 @@
 #include "vm.h"
 
 struct Interpreter;
+
+std::string valueToString(const Value& value);
 
 struct Environment {
     std::unordered_map<std::string, Value> values;
@@ -63,6 +66,7 @@ struct FunctionValue {
 
 struct ClassInfo {
     std::string name;
+    bool isStruct = false;
     std::shared_ptr<ClassInfo> parent;
     std::unordered_map<std::string, Value> defaultProperties;
     std::unordered_map<std::string, std::string> propertyVisibility;
@@ -85,6 +89,23 @@ struct NamespaceInfo {
     std::unordered_map<std::string, std::shared_ptr<ClassInfo>> classes;
     std::unordered_map<std::string, FunctionValue> functions;
     std::unordered_map<std::string, Value> constants;
+};
+
+struct ThrownException {
+    Value value;
+};
+
+struct ArrayData {
+    std::vector<Value> items;
+};
+
+struct MapData {
+    std::map<std::string, Value> items;
+};
+
+struct ExceptionData {
+    std::string message;
+    std::string type = "Exception";
 };
 
 struct FutureState {
@@ -206,6 +227,8 @@ struct Interpreter : std::enable_shared_from_this<Interpreter> {
                      int argc, bool& handled);
     Value mysqlMethod(const Value& object, const std::string& name, const Value* args,
                       int argc, bool& handled);
+    Value collectionMethod(const Value& object, const std::string& name, const Value* args,
+                           int argc, bool& handled);
     Value callFunctionValue(const FunctionValue& function, const std::vector<Value>& args);
     Value callMethod(const Value& object, const std::string& name, const std::vector<Value>& args);
     Value callMethodFrom(const std::shared_ptr<ClassInfo>& info, const Value& object,

@@ -1,0 +1,5 @@
+struct Box {
+    private int secret = 7;
+}
+var b = new Box();
+println(b->secret);

@@ -1,0 +1,16 @@
+println("arrays and maps");
+
+var nums = [10, 20, 30];
+println(len(nums), nums[0], nums[2]);
+nums[1] = 99;
+nums->push(40);
+println(nums->join(","));
+
+var user = {"name": "alang", "age": 7};
+user["active"] = true;
+println(len(user), user["name"], user->has("active"));
+println(user->keys()->join(","));
+
+println("foreach");
+for (x in nums) { println("value", x); }
+for (k, v in user) { println("pair", k, v); }

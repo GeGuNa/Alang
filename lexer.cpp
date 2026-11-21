@@ -16,11 +16,17 @@ const std::unordered_map<std::string, TokType>& keywords() {
         {"char", T_CHAR_TYPE},
         {"fn", T_FN},
         {"class", T_CLASS},
+        {"struct", T_STRUCT},
         {"init", T_INIT},
         {"deinit", T_DEINIT},
         {"this", T_THIS},
         {"new", T_NEW},
         {"null", T_NULL},
+        {"try", T_TRY},
+        {"catch", T_CATCH},
+        {"finally", T_FINALLY},
+        {"throw", T_THROW},
+        {"in", T_IN},
         {"if", T_IF},
         {"else", T_ELSE},
         {"for", T_FOR},
@@ -379,6 +385,8 @@ std::vector<Token> Lexer::tokenize() {
             case ',': advance(); type = T_COMMA; text = ","; break;
             case '(': advance(); type = T_LPAREN; text = "("; break;
             case ')': advance(); type = T_RPAREN; text = ")"; break;
+            case '[': advance(); type = T_LBRACKET; text = "["; break;
+            case ']': advance(); type = T_RBRACKET; text = "]"; break;
             case '{': advance(); type = T_LBRACE; text = "{"; break;
             case '}': advance(); type = T_RBRACE; text = "}"; break;
             case '.': advance(); type = T_DOT; text = "."; break;

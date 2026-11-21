@@ -25,6 +25,10 @@ Run any example from the repository root:
     ./prog demo/php_variables.alang
     ./prog demo/showcase.alang
 
+`collections.alang` and `switch_exceptions.alang` cover arrays/maps/foreach, switch and exceptions.
+
+`struct.alang` shows C++-style structs (public by default).
+
 `mysql.alang` shows the MySQL client (requires a running server).
 
 `web/basic.alang`, `web/full.alang` and `web/secure.alang` demonstrate the built-in Express-style HTTP/HTTPS server (run one, then use curl).

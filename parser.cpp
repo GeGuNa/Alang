@@ -105,7 +105,10 @@ StmtPtr Parser::declaration() {
         return varDeclaration(T_VOID, false, true);
     }
     if (check(T_CLASS)) {
-        return classDeclaration();
+        return classDeclaration(false);
+    }
+    if (check(T_STRUCT)) {
+        return classDeclaration(true);
     }
     if (match({T_NAMESPACE})) {
         return namespaceDeclaration();
@@ -158,7 +161,7 @@ StmtPtr Parser::usingNamespaceStatement() {
     return node;
 }
 
-StmtPtr Parser::classDeclaration() {
+StmtPtr Parser::classDeclaration(bool isStruct) {
     ++current_;
     const Token& nameToken = consume(T_IDENT, "Expected class name");
 
@@ -177,6 +180,7 @@ StmtPtr Parser::classDeclaration() {
     auto node = std::make_shared<ClassDeclStmt>();
     node->name = nameToken.text;
     node->baseName = baseName;
+    node->isStruct = isStruct;
 
     while (!check(T_RBRACE) && !atEnd()) {
         std::string visibility = "public";
@@ -228,11 +232,12 @@ StmtPtr Parser::classDeclaration() {
             ++current_;
         }
         const Token& propertyName = consume(T_IDENT, "Expected property name");
-        if (!propertyName.dollar) {
+        if (!isStruct && !propertyName.dollar) {
             throw LangError(lineMessage(propertyName, "Property must use a dollar sigil"));
         }
         ClassPropertyNode property;
-        property.name = propertyName.text.substr(1);
+        property.name = propertyName.dollar
+            ? propertyName.text.substr(1) : propertyName.text;
         property.declaredType = declaredType;
         property.visibility = visibility;
         property.isStatic = isStatic;
@@ -314,6 +319,17 @@ StmtPtr Parser::statement() {
     }
     if (match({T_FOR})) {
         return forStatement();
+    }
+    if (check(T_SWITCH)) {
+        return switchStatement();
+    }
+    if (check(T_TRY)) {
+        return tryStatement();
+    }
+    if (match({T_THROW})) {
+        ExprPtr thrown = expression();
+        consumeSemicolon();
+        return std::make_shared<ThrowStmt>(std::move(thrown));
     }
     if (match({T_RETURN})) {
         return returnStatement();
@@ -404,6 +420,23 @@ StmtPtr Parser::forStatement() {
         condition = expression();
     } else if (check(T_LPAREN)) {
         ++current_;
+        if (check(T_IDENT) && current_ + 1 < tokens_.size() &&
+            tokens_[current_ + 1].type == T_IN) {
+            std::string value = peek().text;
+            ++current_;
+            return forEachStatement(value, "");
+        }
+        if (check(T_IDENT) && current_ + 3 < tokens_.size() &&
+            tokens_[current_ + 1].type == T_COMMA &&
+            tokens_[current_ + 2].type == T_IDENT &&
+            tokens_[current_ + 3].type == T_IN) {
+            std::string key = peek().text;
+            ++current_;
+            ++current_;
+            std::string value = peek().text;
+            ++current_;
+            return forEachStatement(value, key);
+        }
         if (match({T_SEMICOLON})) {
             initializer = std::make_shared<EmptyStmt>();
         } else if (isTypeToken(peek().type)) {
@@ -570,6 +603,13 @@ ExprPtr Parser::call() {
             continue;
         }
 
+        if (match({T_LBRACKET})) {
+            ExprPtr index = expression();
+            consume(T_RBRACKET, "Expected ']' after index");
+            expr = std::make_shared<IndexExpr>(expr, index);
+            continue;
+        }
+
         if (match({T_DOUBLE_COLON})) {
             const Token& member = consume(T_IDENT, "Expected static member name");
             if (check(T_LPAREN)) {
@@ -659,5 +699,115 @@ ExprPtr Parser::primary() {
         consume(T_RPAREN, "Expected ')' after expression");
         return expr;
     }
+    if (match({T_LBRACKET})) {
+        std::vector<ExprPtr> elements;
+        if (!check(T_RBRACKET)) {
+            do {
+                elements.push_back(expression());
+            } while (match({T_COMMA}));
+        }
+        consume(T_RBRACKET, "Expected ']' after array literal");
+        return std::make_shared<ArrayLiteralExpr>(std::move(elements));
+    }
+    if (match({T_LBRACE})) {
+        std::vector<std::pair<ExprPtr, ExprPtr>> entries;
+        if (!check(T_RBRACE)) {
+            do {
+                ExprPtr key = expression();
+                consume(T_COLON, "Expected ':' in map literal");
+                ExprPtr value = expression();
+                entries.emplace_back(std::move(key), std::move(value));
+            } while (match({T_COMMA}));
+        }
+        consume(T_RBRACE, "Expected '}' after map literal");
+        return std::make_shared<MapLiteralExpr>(std::move(entries));
+    }
     throw LangError(lineMessage(peek(), "Expected expression"));
+}
+
+StmtPtr Parser::forEachStatement(const std::string& valueName, const std::string& keyName) {
+    (void)valueName;
+    (void)keyName;
+    consume(T_IN, "Expected 'in' in for-each");
+    ExprPtr iterable = expression();
+    consume(T_RPAREN, "Expected ')' after for-each");
+    StmtPtr body = statement();
+
+    auto node = std::make_shared<ForEachStmt>();
+    node->keyName = keyName;
+    node->valueName = valueName;
+    node->iterable = std::move(iterable);
+    node->body = std::dynamic_pointer_cast<BlockStmt>(body);
+    return node;
+}
+
+StmtPtr Parser::switchStatement() {
+    ++current_;
+    consume(T_LPAREN, "Expected '(' after switch");
+    ExprPtr value = expression();
+    consume(T_RPAREN, "Expected ')' after switch value");
+    consume(T_LBRACE, "Expected '{' after switch");
+
+    auto node = std::make_shared<SwitchStmt>();
+    node->value = std::move(value);
+
+    while (!check(T_RBRACE) && !atEnd()) {
+        if (match({T_CASE})) {
+            ExprPtr caseValue = expression();
+            consume(T_COLON, "Expected ':' after case");
+            SwitchCase clause;
+            clause.value = std::move(caseValue);
+            while (!check(T_CASE) && !check(T_DEFAULT) && !check(T_RBRACE) && !atEnd()) {
+                clause.statements.push_back(declaration());
+            }
+            node->cases.push_back(std::move(clause));
+            continue;
+        }
+        if (match({T_DEFAULT})) {
+            consume(T_COLON, "Expected ':' after default");
+            while (!check(T_RBRACE) && !atEnd()) {
+                node->defaultBranch.push_back(declaration());
+            }
+            continue;
+        }
+        throw LangError(lineMessage(peek(), "Expected case or default in switch"));
+    }
+    consume(T_RBRACE, "Expected '}' after switch");
+    return node;
+}
+
+StmtPtr Parser::tryStatement() {
+    ++current_;
+    consume(T_LBRACE, "Expected '{' after try");
+    auto node = std::make_shared<TryStmt>();
+    auto tryBlock = std::make_shared<BlockStmt>();
+    while (!check(T_RBRACE) && !atEnd()) {
+        tryBlock->statements.push_back(declaration());
+    }
+    consume(T_RBRACE, "Expected '}' after try block");
+    node->tryBlock = tryBlock;
+
+    if (match({T_CATCH})) {
+        consume(T_LPAREN, "Expected '(' after catch");
+        node->catchName = consume(T_IDENT, "Expected exception name").text;
+        consume(T_RPAREN, "Expected ')' after catch name");
+        consume(T_LBRACE, "Expected '{' after catch");
+        auto catchBlock = std::make_shared<BlockStmt>();
+        while (!check(T_RBRACE) && !atEnd()) {
+            catchBlock->statements.push_back(declaration());
+        }
+        consume(T_RBRACE, "Expected '}' after catch block");
+        node->catchBlock = catchBlock;
+    }
+
+    if (match({T_FINALLY})) {
+        consume(T_LBRACE, "Expected '{' after finally");
+        auto finallyBlock = std::make_shared<BlockStmt>();
+        while (!check(T_RBRACE) && !atEnd()) {
+            finallyBlock->statements.push_back(declaration());
+        }
+        consume(T_RBRACE, "Expected '}' after finally block");
+        node->finallyBlock = finallyBlock;
+    }
+    return node;
 }

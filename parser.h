@@ -32,7 +32,7 @@ private:
     std::vector<std::pair<TokType, std::string>> parameterList();
 
     StmtPtr declaration();
-    StmtPtr classDeclaration();
+    StmtPtr classDeclaration(bool isStruct = false);
     StmtPtr namespaceDeclaration();
     StmtPtr usingNamespaceStatement();
     StmtPtr functionDeclaration(TokType returnType, bool isAsync = false);
@@ -42,6 +42,9 @@ private:
     StmtPtr ifStatement();
     StmtPtr whileStatement();
     StmtPtr forStatement();
+    StmtPtr forEachStatement(const std::string& valueName, const std::string& keyName);
+    StmtPtr switchStatement();
+    StmtPtr tryStatement();
     StmtPtr returnStatement();
     StmtPtr expressionStatement();
 

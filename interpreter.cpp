@@ -79,6 +79,9 @@ bool truthy(const Value& value) {
         case ValueType::HttpRequest: return static_cast<bool>(value.requestPtr());
         case ValueType::HttpResponse: return static_cast<bool>(value.responsePtr());
         case ValueType::UploadedFile: return static_cast<bool>(value.uploadPtr());
+        case ValueType::Array: return static_cast<bool>(value.arrayPtr());
+        case ValueType::Map: return static_cast<bool>(value.mapPtr());
+        case ValueType::Exception: return static_cast<bool>(value.exceptionPtr());
         case ValueType::MysqlConn: return static_cast<bool>(value.mysqlPtr());
         case ValueType::MysqlResult: return static_cast<bool>(value.mysqlResultPtr());
         case ValueType::MysqlRow: return static_cast<bool>(value.mysqlRowPtr());
@@ -110,6 +113,9 @@ double asNumber(const Value& value) {
         case ValueType::HttpRequest: return 0.0;
         case ValueType::HttpResponse: return 0.0;
         case ValueType::UploadedFile: return 0.0;
+        case ValueType::Array: return 0.0;
+        case ValueType::Map: return 0.0;
+        case ValueType::Exception: return 0.0;
         case ValueType::MysqlConn: return 0.0;
         case ValueType::MysqlResult: return 0.0;
         case ValueType::MysqlRow: return 0.0;
@@ -160,6 +166,12 @@ std::string valueToString(const Value& value) {
         case ValueType::HttpRequest: return "<request>";
         case ValueType::HttpResponse: return "<response>";
         case ValueType::UploadedFile: return "<file>";
+        case ValueType::Array: return "<array>";
+        case ValueType::Map: return "<map>";
+        case ValueType::Exception: {
+            std::shared_ptr<ExceptionData> error = value.exceptionPtr();
+            return error ? "Exception: " + error->message : "Exception";
+        }
         case ValueType::MysqlConn: return "<mysql>";
         case ValueType::MysqlResult: return "<mysql result>";
         case ValueType::MysqlRow: return "<mysql row>";
@@ -894,6 +906,9 @@ Value MemberCallExpr::eval(Interpreter& interpreter) {
     if (!handled) {
         special = interpreter.mysqlMethod(object, name, args.data(), argc, handled);
     }
+    if (!handled) {
+        special = interpreter.collectionMethod(object, name, args.data(), argc, handled);
+    }
     if (handled) {
         return special;
     }
@@ -1046,6 +1061,7 @@ ExecResult FunctionDeclStmt::exec(Interpreter& interpreter) {
 ExecResult ClassDeclStmt::exec(Interpreter& interpreter) {
     auto info = std::make_shared<ClassInfo>();
     info->name = name;
+    info->isStruct = isStruct;
 
     if (!baseName.empty()) {
         auto parentIt = interpreter.classes.find(baseName);
@@ -1169,6 +1185,15 @@ Interpreter::Interpreter() {
         }
         std::cout << '\n';
         return makeVoid();
+    };
+
+    natives["len"] = [](Interpreter&, const std::vector<Value>& args) {
+        if (args.empty()) return makeInt(0);
+        const Value& value = args[0];
+        if (value.type == ValueType::Array) return makeInt(static_cast<long long>(value.arrayPtr()->items.size()));
+        if (value.type == ValueType::Map) return makeInt(static_cast<long long>(value.mapPtr()->items.size()));
+        if (value.type == ValueType::String) return makeInt(static_cast<long long>(value.str().size()));
+        return makeInt(0);
     };
 
     for (const auto& entry : natives) {
@@ -1815,6 +1840,9 @@ Value Interpreter::runFrame(Frame& frame) {
                 }
                 if (!handled) {
                     special = mysqlMethod(object, name, argBuffer, argc, handled);
+                }
+                if (!handled) {
+                    special = collectionMethod(object, name, argBuffer, argc, handled);
                 }
                 if (handled) {
                     push(special);
@@ -2603,6 +2631,247 @@ Value Interpreter::mysqlMethod(const Value& object, const std::string& name, con
             return makeString(row->values[static_cast<std::size_t>(index)]);
         }
         if (name == "size") return makeInt(static_cast<long long>(row->values.size()));
+        handled = false;
+        return makeVoid();
+    }
+
+    handled = false;
+    return makeVoid();
+}
+
+Value ArrayLiteralExpr::eval(Interpreter& interpreter) {
+    auto array = std::make_shared<ArrayData>();
+    for (const ExprPtr& element : elements) {
+        array->items.push_back(element->eval(interpreter));
+    }
+    Value value;
+    value.type = ValueType::Array;
+    value.payload = array;
+    return value;
+}
+
+Value MapLiteralExpr::eval(Interpreter& interpreter) {
+    auto map = std::make_shared<MapData>();
+    for (const auto& entry : entries) {
+        Value key = entry.first->eval(interpreter);
+        map->items[valueToString(key)] = entry.second->eval(interpreter);
+    }
+    Value value;
+    value.type = ValueType::Map;
+    value.payload = map;
+    return value;
+}
+
+Value IndexExpr::eval(Interpreter& interpreter) {
+    Value targetValue = object->eval(interpreter);
+    Value keyValue = index->eval(interpreter);
+    if (targetValue.type == ValueType::Array) {
+        long long position = keyValue.type == ValueType::Int ? keyValue.ival
+            : static_cast<long long>(asNumber(keyValue));
+        const auto& items = targetValue.arrayPtr()->items;
+        if (position < 0 || static_cast<std::size_t>(position) >= items.size()) return makeVoid();
+        return items[static_cast<std::size_t>(position)];
+    }
+    if (targetValue.type == ValueType::Map) {
+        auto it = targetValue.mapPtr()->items.find(valueToString(keyValue));
+        return it == targetValue.mapPtr()->items.end() ? makeVoid() : it->second;
+    }
+    if (targetValue.type == ValueType::String) {
+        long long position = keyValue.type == ValueType::Int ? keyValue.ival
+            : static_cast<long long>(asNumber(keyValue));
+        const std::string& text = targetValue.str();
+        if (position < 0 || static_cast<std::size_t>(position) >= text.size()) return makeString("");
+        return makeString(std::string(1, text[static_cast<std::size_t>(position)]));
+    }
+    throw LangError("Value is not indexable");
+}
+
+void IndexExpr::assign(Interpreter& interpreter, const Value& value) {
+    Value targetValue = object->eval(interpreter);
+    Value keyValue = index->eval(interpreter);
+    if (targetValue.type == ValueType::Array) {
+        long long position = keyValue.type == ValueType::Int ? keyValue.ival
+            : static_cast<long long>(asNumber(keyValue));
+        auto& items = targetValue.arrayPtr()->items;
+        if (position < 0 || static_cast<std::size_t>(position) >= items.size()) {
+            throw LangError("Array index out of range");
+        }
+        items[static_cast<std::size_t>(position)] = value;
+        return;
+    }
+    if (targetValue.type == ValueType::Map) {
+        targetValue.mapPtr()->items[valueToString(keyValue)] = value;
+        return;
+    }
+    throw LangError("Value does not support index assignment");
+}
+
+ExecResult ForEachStmt::exec(Interpreter& interpreter) {
+    Value source = iterable->eval(interpreter);
+    std::vector<std::pair<Value, Value>> pairs;
+
+    if (source.type == ValueType::Array) {
+        long long index = 0;
+        for (const Value& item : source.arrayPtr()->items) {
+            pairs.emplace_back(makeInt(index++), item);
+        }
+    } else if (source.type == ValueType::Map) {
+        for (const auto& entry : source.mapPtr()->items) {
+            pairs.emplace_back(makeString(entry.first), entry.second);
+        }
+    } else if (source.type == ValueType::String) {
+        long long index = 0;
+        for (char character : source.str()) {
+            pairs.emplace_back(makeInt(index++), makeString(std::string(1, character)));
+        }
+    } else {
+        throw LangError("for-each requires an array, map or string");
+    }
+
+    for (const auto& pair : pairs) {
+        auto scope = std::make_shared<Environment>(interpreter.environment);
+        if (!valueName.empty()) scope->define(valueName, pair.second);
+        if (!keyName.empty()) scope->define(keyName, pair.first);
+        ExecResult result = interpreter.executeBlock(body ? body->statements : std::vector<StmtPtr>{}, scope);
+        if (result.flow == Flow::Return) return result;
+        if (result.flow == Flow::Break) break;
+    }
+    return ExecResult{};
+}
+
+ExecResult SwitchStmt::exec(Interpreter& interpreter) {
+    Value target = value->eval(interpreter);
+    std::size_t start = cases.size();
+    for (std::size_t i = 0; i < cases.size(); ++i) {
+        Value candidate = cases[i].value->eval(interpreter);
+        if (valuesEqual(target, candidate)) { start = i; break; }
+    }
+    if (start == cases.size()) {
+        for (const StmtPtr& statement : defaultBranch) {
+            ExecResult result = statement->exec(interpreter);
+            if (result.flow == Flow::Break) return ExecResult{};
+            if (result.flow != Flow::Normal) return result;
+        }
+        return ExecResult{};
+    }
+    for (std::size_t i = start; i < cases.size(); ++i) {
+        for (const StmtPtr& statement : cases[i].statements) {
+            ExecResult result = statement->exec(interpreter);
+            if (result.flow == Flow::Break) return ExecResult{};
+            if (result.flow != Flow::Normal) return result;
+        }
+    }
+    for (const StmtPtr& statement : defaultBranch) {
+        ExecResult result = statement->exec(interpreter);
+        if (result.flow == Flow::Break) return ExecResult{};
+        if (result.flow != Flow::Normal) return result;
+    }
+    return ExecResult{};
+}
+
+ExecResult ThrowStmt::exec(Interpreter& interpreter) {
+    ThrownException thrown;
+    thrown.value = value ? value->eval(interpreter) : makeVoid();
+    throw thrown;
+}
+
+ExecResult TryStmt::exec(Interpreter& interpreter) {
+    ExecResult result;
+    try {
+        result = tryBlock->exec(interpreter);
+    } catch (const ThrownException& thrown) {
+        if (catchBlock && !catchName.empty()) {
+            auto scope = std::make_shared<Environment>(interpreter.environment);
+            scope->define(catchName, thrown.value);
+            result = interpreter.executeBlock(catchBlock->statements, scope);
+        } else {
+            result.flow = Flow::Return;
+            result.value = thrown.value;
+        }
+    }
+    if (finallyBlock) {
+        ExecResult finallyResult = finallyBlock->exec(interpreter);
+        if (finallyResult.flow != Flow::Normal) return finallyResult;
+    }
+    return result;
+}
+
+Value Interpreter::collectionMethod(const Value& object, const std::string& name, const Value* args,
+                                    int argc, bool& handled) {
+    handled = true;
+
+    if (object.type == ValueType::Array) {
+        auto array = object.arrayPtr();
+        if (name == "size" || name == "len") return makeInt(static_cast<long long>(array->items.size()));
+        if (name == "push") {
+            if (argc > 0) array->items.push_back(args[0]);
+            return makeInt(static_cast<long long>(array->items.size()));
+        }
+        if (name == "get" || name == "at") {
+            if (argc < 1 || args[0].ival < 0 || static_cast<std::size_t>(args[0].ival) >= array->items.size()) {
+                return makeVoid();
+            }
+            return array->items[static_cast<std::size_t>(args[0].ival)];
+        }
+        if (name == "set") {
+            if (argc < 2 || args[0].ival < 0 || static_cast<std::size_t>(args[0].ival) >= array->items.size()) {
+                return makeBool(false);
+            }
+            array->items[static_cast<std::size_t>(args[0].ival)] = args[1];
+            return makeBool(true);
+        }
+        if (name == "join") {
+            std::string separator = argc > 0 ? valueToString(args[0]) : "";
+            std::string result;
+            for (const auto& item : array->items) {
+                if (!result.empty()) result += separator;
+                result += valueToString(item);
+            }
+            return makeString(result);
+        }
+        handled = false;
+        return makeVoid();
+    }
+
+    if (object.type == ValueType::Map) {
+        auto map = object.mapPtr();
+        if (name == "size" || name == "len") return makeInt(static_cast<long long>(map->items.size()));
+        if (name == "get") {
+            if (argc < 1) return makeVoid();
+            auto it = map->items.find(valueToString(args[0]));
+            return it == map->items.end() ? makeVoid() : it->second;
+        }
+        if (name == "set") {
+            if (argc < 2) return makeBool(false);
+            map->items[valueToString(args[0])] = args[1];
+            return makeBool(true);
+        }
+        if (name == "has") {
+            if (argc < 1) return makeBool(false);
+            return makeBool(map->items.count(valueToString(args[0])) != 0);
+        }
+        if (name == "remove") {
+            if (argc < 1) return makeBool(false);
+            return makeBool(map->items.erase(valueToString(args[0])) > 0);
+        }
+        if (name == "keys" || name == "values") {
+            auto array = std::make_shared<ArrayData>();
+            for (const auto& entry : map->items) {
+                array->items.push_back(name == "keys" ? makeString(entry.first) : entry.second);
+            }
+            Value value;
+            value.type = ValueType::Array;
+            value.payload = array;
+            return value;
+        }
+        handled = false;
+        return makeVoid();
+    }
+
+    if (object.type == ValueType::Exception) {
+        auto error = object.exceptionPtr();
+        if (name == "message") return makeString(error->message);
+        if (name == "type") return makeString(error->type);
         handled = false;
         return makeVoid();
     }

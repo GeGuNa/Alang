@@ -15,11 +15,17 @@ enum TokType {
     T_BOOL_LIT,
     T_FN,
     T_CLASS,
+    T_STRUCT,
     T_INIT,
     T_DEINIT,
     T_THIS,
     T_NEW,
     T_NULL,
+    T_TRY,
+    T_CATCH,
+    T_FINALLY,
+    T_THROW,
+    T_IN,
     T_IF,
     T_ELSE,
     T_FOR,
@@ -72,6 +78,8 @@ enum TokType {
     T_COMMA,
     T_LPAREN,
     T_RPAREN,
+    T_LBRACKET,
+    T_RBRACKET,
     T_LBRACE,
     T_RBRACE,
     T_DOT,
@@ -91,7 +99,7 @@ struct Token {
     bool dollar = false;
 };
 
-enum class ValueType { Void, Null, Int, Double, Bool, String, Function, Object, ObjectWeak, Class, Namespace, Future, Thread, HttpServer, HttpRequest, HttpResponse, UploadedFile, MysqlConn, MysqlResult, MysqlRow };
+enum class ValueType { Void, Null, Int, Double, Bool, String, Function, Object, ObjectWeak, Class, Namespace, Future, Thread, HttpServer, HttpRequest, HttpResponse, UploadedFile, Array, Map, Exception, MysqlConn, MysqlResult, MysqlRow };
 
 struct FunctionValue;
 struct ObjectInstance;
@@ -106,6 +114,9 @@ struct UploadedFile;
 struct MysqlConnectionData;
 struct MysqlResultData;
 struct MysqlResultRow;
+struct ArrayData;
+struct MapData;
+struct ExceptionData;
 
 struct WeakObjectRef {
     std::weak_ptr<ObjectInstance> ref;
@@ -163,6 +174,15 @@ struct Value {
     }
     std::shared_ptr<MysqlResultRow> mysqlRowPtr() const {
         return std::static_pointer_cast<MysqlResultRow>(payload);
+    }
+    std::shared_ptr<ArrayData> arrayPtr() const {
+        return std::static_pointer_cast<ArrayData>(payload);
+    }
+    std::shared_ptr<MapData> mapPtr() const {
+        return std::static_pointer_cast<MapData>(payload);
+    }
+    std::shared_ptr<ExceptionData> exceptionPtr() const {
+        return std::static_pointer_cast<ExceptionData>(payload);
     }
 
     std::string& str() { return *strPtr(); }

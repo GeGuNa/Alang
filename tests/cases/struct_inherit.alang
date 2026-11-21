@@ -1,0 +1,4 @@
+struct Base { int a = 1; }
+struct Child extends Base { int b = 2; }
+var c = new Child();
+println(c->a, c->b);

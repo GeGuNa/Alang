@@ -1,0 +1,5 @@
+var a = [10, 20];
+for (x in a) { println(x); }
+var m = {"x": 1, "y": 2};
+for (k, v in m) { println(k, v); }
+for (ch in "ab") { println(ch); }

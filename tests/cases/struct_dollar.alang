@@ -1,0 +1,8 @@
+struct Data {
+    string $name = "none";
+    int $count = 0;
+}
+var d = new Data();
+println(d->name, d->count);
+d->name = "x";
+println(d->name);

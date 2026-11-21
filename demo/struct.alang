@@ -1,0 +1,30 @@
+println("C++ style structs (public by default)");
+
+struct Point {
+    int x = 0;
+    int y = 0;
+
+    function move(int dx, int dy) {
+        $this->x = $this->x + dx;
+        $this->y = $this->y + dy;
+        return $this;
+    }
+
+    function sum() {
+        return $this->x + $this->y;
+    }
+}
+
+var p = new Point();
+p->x = 3;
+p->y = 4;
+println(p->x, p->y, p->sum());
+println(p->move(1, 2)->sum());
+
+println("private members still work in structs");
+struct Vault {
+    private int code = 42;
+    public function reveal() { return $this->code; }
+}
+var v = new Vault();
+println(v->reveal());

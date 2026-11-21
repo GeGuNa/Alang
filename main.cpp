@@ -79,6 +79,9 @@ int main(int argc, char** argv) {
         interpreter->compileProgram(program);
         interpreter->runProgram();
         interpreter->shutdown();
+    } catch (const ThrownException& thrown) {
+        std::cerr << "Uncaught: " << valueToString(thrown.value) << '\n';
+        return 1;
     } catch (const LangError& error) {
         std::cerr << "Error: " << error.what() << '\n';
         return 1;

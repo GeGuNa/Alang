@@ -1,0 +1,9 @@
+struct Point {
+    int x = 0;
+    int y = 0;
+    function sum() { return $this->x + $this->y; }
+}
+var p = new Point();
+p->x = 3;
+p->y = 4;
+println(p->x, p->y, p->sum());

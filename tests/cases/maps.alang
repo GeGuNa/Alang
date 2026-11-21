@@ -1,0 +1,7 @@
+var m = {"a": 1, "b": 2};
+println(len(m), m["a"], m["b"]);
+m["c"] = 3;
+println(len(m), m->has("c"), m->get("b"));
+println(m->keys()->join(","));
+println(m->values()->join(","));
+println(m->remove("a"), m->has("a"));

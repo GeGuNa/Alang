@@ -185,6 +185,13 @@ private:
             return;
         }
 
+        if (std::dynamic_pointer_cast<ArrayLiteralExpr>(expr) ||
+            std::dynamic_pointer_cast<MapLiteralExpr>(expr) ||
+            std::dynamic_pointer_cast<IndexExpr>(expr)) {
+            emit(Op::EVAL_NODE, expressionIndex(expr));
+            return;
+        }
+
         if (auto literal = std::dynamic_pointer_cast<LiteralExpr>(expr)) {
             emit(Op::CONST, constantIndex(literal->value));
             return;
@@ -423,6 +430,14 @@ private:
             if (declaration->isVar) flags |= 2;
             int instruction = emit(Op::DEFINE_VAR, slot, flags | (isLocal ? 4 : 0));
             chunk_.code[instruction].c = nameIndex(declaration->name);
+            return;
+        }
+
+        if (std::dynamic_pointer_cast<ForEachStmt>(statement) ||
+            std::dynamic_pointer_cast<SwitchStmt>(statement) ||
+            std::dynamic_pointer_cast<TryStmt>(statement) ||
+            std::dynamic_pointer_cast<ThrowStmt>(statement)) {
+            emit(Op::EXEC_NODE, statementIndex(statement));
             return;
         }
 

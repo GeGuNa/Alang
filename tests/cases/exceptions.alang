@@ -1,0 +1,13 @@
+function risky(int x) {
+    if (x == 0) { throw "zero"; }
+    return 100 / x;
+}
+try {
+    println(risky(2));
+    println(risky(0));
+} catch (e) {
+    println("caught:", e);
+} finally {
+    println("finally");
+}
+println("after");
